@@ -1442,12 +1442,12 @@ function TicketManager({
   tickets: TicketPlan[];
   onTicketChange: (ticketId: string, updates: Partial<TicketPlan>) => void;
 }) {
-  const [selectedTicketId, setSelectedTicketId] = useState(tickets[0]?.id ?? "");
-  const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) ?? tickets[0];
+  const [selectedTicketId, setSelectedTicketId] = useState("");
+  const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId);
 
   useEffect(() => {
-    if (tickets.length > 0 && !tickets.some((ticket) => ticket.id === selectedTicketId)) {
-      setSelectedTicketId(tickets[0].id);
+    if (selectedTicketId && !tickets.some((ticket) => ticket.id === selectedTicketId)) {
+      setSelectedTicketId("");
     }
   }, [selectedTicketId, tickets]);
 
@@ -1461,7 +1461,7 @@ function TicketManager({
             <div className="ticketEntry" key={ticket.id}>
               <button
                 className={`ticketRow ${isSelected ? "active" : ""}`}
-                onClick={() => setSelectedTicketId(ticket.id)}
+                onClick={() => setSelectedTicketId((current) => (current === ticket.id ? "" : ticket.id))}
                 type="button"
               >
                 <div>
@@ -1574,12 +1574,12 @@ function ProductionManager({
   items: ProductionItem[];
   onProductionItemChange: (itemId: string, updates: Partial<ProductionItem>) => void;
 }) {
-  const [selectedItemId, setSelectedItemId] = useState(items[0]?.id ?? "");
-  const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0];
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const selectedItem = items.find((item) => item.id === selectedItemId);
 
   useEffect(() => {
-    if (items.length > 0 && !items.some((item) => item.id === selectedItemId)) {
-      setSelectedItemId(items[0].id);
+    if (selectedItemId && !items.some((item) => item.id === selectedItemId)) {
+      setSelectedItemId("");
     }
   }, [items, selectedItemId]);
 
@@ -1593,7 +1593,7 @@ function ProductionManager({
             <div className="productionEntry" key={item.id}>
               <button
                 className={`productionRow ${isSelected ? "active" : ""} ${late ? "late" : ""}`}
-                onClick={() => setSelectedItemId(item.id)}
+                onClick={() => setSelectedItemId((current) => (current === item.id ? "" : item.id))}
                 type="button"
               >
                 <div>
