@@ -29,6 +29,12 @@ type LiveListView = "未" | "完";
 type TicketStatus = "未作成" | "作成中" | "確認中" | "公開済";
 type ProductionStatus = "未依頼" | "依頼済" | "制作中" | "確認待ち" | "入稿済" | "納品済";
 
+type SubTask = {
+  id: string;
+  title: string;
+  done: boolean;
+};
+
 type Task = {
   id: string;
   phase: Phase;
@@ -38,6 +44,7 @@ type Task = {
   priority: Priority;
   status: TaskStatus;
   memo?: string;
+  subtasks?: SubTask[];
 };
 
 type TicketPlan = {
@@ -182,6 +189,78 @@ const taskTemplates: Array<{
   },
   { phase: "当日", title: "最前列の紙用意", offset: -2, owner: "小林", priority: "通常" },
 ];
+
+const subtaskTemplates: Record<string, string[]> = {
+  "チケットページ作成": [
+    "券種・価格を確定",
+    "特典内容を確認",
+    "販売ページを作成",
+    "URLを共有",
+    "公開確認",
+  ],
+  "タイムテーブル作成": [
+    "入り時間を確認",
+    "本番尺を確定",
+    "転換時間を入れる",
+    "関係者へ共有",
+  ],
+  "楽曲制作": [
+    "制作範囲を確定",
+    "デモ確認",
+    "修正依頼",
+    "音源納品確認",
+  ],
+  "セトリ": [
+    "候補曲を整理",
+    "曲順を決定",
+    "音源・歌詞を確認",
+    "メンバーへ共有",
+  ],
+  "告知画像の依頼": [
+    "必要素材を集める",
+    "掲載情報を確定",
+    "外注先へ依頼",
+    "初稿確認",
+    "公開用データ確認",
+  ],
+  "制作物リストの企画": [
+    "制作物候補を出す",
+    "数量を仮決め",
+    "原価を確認",
+    "発注対象を確定",
+  ],
+  "グッズ入稿": [
+    "商品名を確定",
+    "価格を確定",
+    "デザインデータ確認",
+    "入稿先へ送付",
+    "入稿完了確認",
+  ],
+  "衣装イメージ共有": [
+    "参考画像を集める",
+    "カラー・方向性を決める",
+    "制作会社へ共有",
+    "初回フィードバック確認",
+  ],
+  "最終確認": [
+    "サイズ確認",
+    "着用写真確認",
+    "修正点を整理",
+    "最終OKを出す",
+  ],
+  "衣装納品": [
+    "納品日を確認",
+    "不足物を確認",
+    "保管場所を決める",
+    "当日持ち出し準備",
+  ],
+  "VIP用ピクチャチケットを準備": [
+    "対象者数を確認",
+    "デザイン確認",
+    "印刷",
+    "当日受付へ共有",
+  ],
+};
 
 const initialProjects: LiveProject[] = [
   {
@@ -774,7 +853,7 @@ function App() {
       ...project,
       tasks: project.tasks.map((task) =>
         task.id === taskId
-          ? { ...task, status: task.status === "完了" ? "未着手" : "完了" }
+          ? updateTaskStatusValue(task, task.status === "完了" ? "未着手" : "完了")
           : task,
       ),
     }));
@@ -783,7 +862,23 @@ function App() {
   function setTaskStatus(projectId: string, taskId: string, status: TaskStatus) {
     updateProject(projectId, (project) => ({
       ...project,
-      tasks: project.tasks.map((task) => (task.id === taskId ? { ...task, status } : task)),
+      tasks: project.tasks.map((task) => (task.id === taskId ? updateTaskStatusValue(task, status) : task)),
+    }));
+  }
+
+  function toggleSubtask(projectId: string, taskId: string, subtaskId: string) {
+    updateProject(projectId, (project) => ({
+      ...project,
+      tasks: project.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks?.map((subtask) =>
+                subtask.id === subtaskId ? { ...subtask, done: !subtask.done } : subtask,
+              ),
+            }
+          : task,
+      ),
     }));
   }
 
@@ -832,6 +927,7 @@ function App() {
       priority: "通常",
       status: "未着手",
     };
+    task.subtasks = buildSubtasks(task.id, title);
 
     updateProject(selectedLive.id, (project) => ({
       ...project,
@@ -1075,11 +1171,13 @@ function App() {
                       task={task}
                       selected={selectedTaskKey === `${task.liveId}-${task.id}`}
                       onSelectLive={() => {
+                        const key = `${task.liveId}-${task.id}`;
                         setSelectedLiveId(task.liveId);
-                        setSelectedTaskKey(`${task.liveId}-${task.id}`);
+                        setSelectedTaskKey((current) => (current === key ? null : key));
                       }}
                       onToggle={() => toggleTask(task.liveId, task.id)}
                       onStatusChange={(status) => setTaskStatus(task.liveId, task.id, status)}
+                      onSubtaskToggle={(subtaskId) => toggleSubtask(task.liveId, task.id, subtaskId)}
                     />
                   ))}
                   {visibleTasks.length === 0 && (
@@ -1284,13 +1382,18 @@ function TaskRow({
   onSelectLive,
   onToggle,
   onStatusChange,
+  onSubtaskToggle,
 }: {
   task: Task & { liveId: string; liveTitle: string; eventDate: string };
   selected: boolean;
   onSelectLive: () => void;
   onToggle: () => void;
   onStatusChange: (status: TaskStatus) => void;
+  onSubtaskToggle: (subtaskId: string) => void;
 }) {
+  const subtaskStats = getSubtaskStats(task);
+  const hasSubtasks = Boolean(task.subtasks?.length);
+
   return (
     <article
       className={`taskRow ${isLate(task) ? "late" : ""} ${task.status === "完了" ? "done" : ""} ${
@@ -1308,6 +1411,11 @@ function TaskRow({
           <DueBadge date={task.dueDate} done={task.status === "完了"} />
         </div>
         <h3>{task.title}</h3>
+        {hasSubtasks && (
+          <span className="subtaskSummary">
+            サブタスク {subtaskStats.done}/{subtaskStats.total}
+          </span>
+        )}
         {task.memo && <small>{task.memo}</small>}
       </button>
       <div className="taskOps">
@@ -1324,6 +1432,21 @@ function TaskRow({
           <ChevronDown size={14} />
         </label>
       </div>
+      {selected && hasSubtasks && (
+        <div className="subtaskPanel">
+          {task.subtasks?.map((subtask) => (
+            <button
+              className={subtask.done ? "done" : ""}
+              key={subtask.id}
+              onClick={() => onSubtaskToggle(subtask.id)}
+              type="button"
+            >
+              <span>{subtask.done && <Check size={13} />}</span>
+              <b>{subtask.title}</b>
+            </button>
+          ))}
+        </div>
+      )}
     </article>
   );
 }
@@ -2184,11 +2307,41 @@ function generateTasks(projectId: string, eventDate: string): Task[] {
     priority: template.priority,
     status: "未着手",
     memo: template.memo,
+    subtasks: buildSubtasks(`${projectId}-task-${index}`, template.title),
   }));
 }
 
 function applyStatuses(tasks: Task[], statuses: Record<string, TaskStatus>) {
-  return tasks.map((task) => ({ ...task, status: statuses[task.title] ?? task.status }));
+  return tasks.map((task) => updateTaskStatusValue(task, statuses[task.title] ?? task.status));
+}
+
+function buildSubtasks(taskId: string, title: string): SubTask[] | undefined {
+  const templates = subtaskTemplates[title];
+  if (!templates) return undefined;
+  return templates.map((subtaskTitle, index) => ({
+    id: `${taskId}-subtask-${index}`,
+    title: subtaskTitle,
+    done: false,
+  }));
+}
+
+function updateTaskStatusValue(task: Task, status: TaskStatus): Task {
+  return {
+    ...task,
+    status,
+    subtasks:
+      status === "完了"
+        ? task.subtasks?.map((subtask) => ({ ...subtask, done: true }))
+        : task.subtasks,
+  };
+}
+
+function getSubtaskStats(task: Pick<Task, "subtasks">) {
+  const subtasks = task.subtasks ?? [];
+  return {
+    done: subtasks.filter((subtask) => subtask.done).length,
+    total: subtasks.length,
+  };
 }
 
 function defaultTickets(ticketLaunch: string, liveType: LiveType): TicketPlan[] {

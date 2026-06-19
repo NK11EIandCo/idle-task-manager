@@ -481,6 +481,70 @@ button {
   line-height: 1.25;
 }
 
+.subtaskSummary {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e8f2ff;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.subtaskPanel {
+  display: grid;
+  grid-column: 2 / -1;
+  gap: 5px;
+  padding: 7px 0 1px;
+}
+
+.subtaskPanel button {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  text-align: left;
+}
+
+.subtaskPanel button.done {
+  color: var(--sub);
+}
+
+.subtaskPanel span {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid #b7c0cc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #ffffff;
+}
+
+.subtaskPanel button.done span {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.subtaskPanel b {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.subtaskPanel button.done b {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 .taskOps {
   display: grid;
   justify-items: end;
