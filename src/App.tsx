@@ -882,6 +882,30 @@ function App() {
     }));
   }
 
+  function addSubtask(projectId: string, taskId: string, title: string) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
+
+    updateProject(projectId, (project) => ({
+      ...project,
+      tasks: project.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: [
+                ...(task.subtasks ?? []),
+                {
+                  id: `${task.id}-subtask-${crypto.randomUUID()}`,
+                  title: trimmedTitle,
+                  done: false,
+                },
+              ],
+            }
+          : task,
+      ),
+    }));
+  }
+
   function updateTicket(projectId: string, ticketId: string, updates: Partial<TicketPlan>) {
     updateProject(projectId, (project) => ({
       ...project,
@@ -1090,8 +1114,11 @@ function App() {
                   }
 
                   const key = `${item.liveId}-${item.taskId}`;
+                  const linkedTask = projects
+                    .find((project) => project.id === item.liveId)
+                    ?.tasks.find((task) => task.id === item.taskId);
                   setTaskView(taskViewFromStatus(item.taskStatus ?? "未着手"));
-                  setSelectedTaskKey(key);
+                  setSelectedTaskKey(linkedTask?.subtasks?.length ? key : null);
                   window.setTimeout(() => {
                     document.getElementById(`task-${key}`)?.scrollIntoView({
                       behavior: "smooth",
@@ -1178,6 +1205,7 @@ function App() {
                       onToggle={() => toggleTask(task.liveId, task.id)}
                       onStatusChange={(status) => setTaskStatus(task.liveId, task.id, status)}
                       onSubtaskToggle={(subtaskId) => toggleSubtask(task.liveId, task.id, subtaskId)}
+                      onSubtaskAdd={(title) => addSubtask(task.liveId, task.id, title)}
                     />
                   ))}
                   {visibleTasks.length === 0 && (
@@ -1383,6 +1411,7 @@ function TaskRow({
   onToggle,
   onStatusChange,
   onSubtaskToggle,
+  onSubtaskAdd,
 }: {
   task: Task & { liveId: string; liveTitle: string; eventDate: string };
   selected: boolean;
@@ -1390,21 +1419,41 @@ function TaskRow({
   onToggle: () => void;
   onStatusChange: (status: TaskStatus) => void;
   onSubtaskToggle: (subtaskId: string) => void;
+  onSubtaskAdd: (title: string) => void;
 }) {
+  const [subtaskDraft, setSubtaskDraft] = useState("");
+  const [isAddingFirstSubtask, setIsAddingFirstSubtask] = useState(false);
   const subtaskStats = getSubtaskStats(task);
   const hasSubtasks = Boolean(task.subtasks?.length);
+  const showSubtaskPanel = (selected && hasSubtasks) || isAddingFirstSubtask;
+  const addDraftSubtask = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const title = subtaskDraft.trim();
+    if (!title) return;
+    onSubtaskAdd(title);
+    setSubtaskDraft("");
+    setIsAddingFirstSubtask(false);
+    if (!hasSubtasks) onSelectLive();
+  };
 
   return (
     <article
       className={`taskRow ${isLate(task) ? "late" : ""} ${task.status === "完了" ? "done" : ""} ${
-        selected ? "selected" : ""
+        selected && hasSubtasks ? "selected" : ""
       }`}
       id={`task-${task.liveId}-${task.id}`}
     >
       <button className="checkButton" onClick={onToggle} type="button" aria-label="完了切替">
         {task.status === "完了" && <Check size={15} />}
       </button>
-      <button className="taskBody" onClick={onSelectLive} type="button">
+      <button
+        aria-disabled={!hasSubtasks}
+        className={`taskBody ${hasSubtasks ? "selectable" : "noSubtasks"}`}
+        onClick={() => {
+          if (hasSubtasks) onSelectLive();
+        }}
+        type="button"
+      >
         <div className="taskMeta">
           <PhaseBadge phase={task.phase} />
           <PriorityBadge priority={task.priority} />
@@ -1431,8 +1480,18 @@ function TaskRow({
           </select>
           <ChevronDown size={14} />
         </label>
+        {!hasSubtasks && (
+          <button
+            className="subtaskAddToggle"
+            onClick={() => setIsAddingFirstSubtask((current) => !current)}
+            type="button"
+          >
+            <Plus size={13} />
+            サブ
+          </button>
+        )}
       </div>
-      {selected && hasSubtasks && (
+      {showSubtaskPanel && (
         <div className="subtaskPanel">
           {task.subtasks?.map((subtask) => (
             <button
@@ -1445,6 +1504,14 @@ function TaskRow({
               <b>{subtask.title}</b>
             </button>
           ))}
+          <form className="subtaskAddForm" onSubmit={addDraftSubtask}>
+            <input
+              value={subtaskDraft}
+              onChange={(event) => setSubtaskDraft(event.target.value)}
+              placeholder="サブタスクを追加"
+            />
+            <button type="submit">追加</button>
+          </form>
         </div>
       )}
     </article>
