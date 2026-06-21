@@ -60,6 +60,32 @@ button {
   margin-bottom: 14px;
 }
 
+.modeSwitch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(70px, 1fr));
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.modeSwitch button {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sub);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.modeSwitch button.active {
+  background: var(--teal-bg);
+  color: var(--teal);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -118,6 +144,12 @@ button {
 .groupPage {
   display: grid;
   gap: 10px;
+}
+
+.managerPage {
+  height: calc(100vh - 90px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .mainPanel,
@@ -222,6 +254,291 @@ button {
 
 .scrollHintBottom {
   bottom: 8px;
+}
+
+.managerView {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.managerPanel {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.managerStats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.managerStatCard {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  min-height: 78px;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 8px 18px rgba(24, 35, 51, 0.05);
+  text-align: left;
+}
+
+.managerStatCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--tone);
+}
+
+.managerStatCard.active {
+  border-color: var(--tone);
+  box-shadow: inset 0 0 0 1px var(--tone), 0 12px 24px rgba(24, 35, 51, 0.08);
+}
+
+.managerStats span {
+  overflow: hidden;
+  color: var(--sub);
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerStats b {
+  color: var(--tone);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.tone-all {
+  --tone: #0f766e;
+  --tone-bg: #ecfdf5;
+  --tone-border: #99f6e4;
+}
+
+.tone-late {
+  --tone: #dc2626;
+  --tone-bg: #fef2f2;
+  --tone-border: #fecaca;
+}
+
+.tone-today {
+  --tone: #ea580c;
+  --tone-bg: #fff7ed;
+  --tone-border: #fed7aa;
+}
+
+.tone-soon {
+  --tone: #ca8a04;
+  --tone-bg: #fefce8;
+  --tone-border: #fde68a;
+}
+
+.tone-external {
+  --tone: #7c3aed;
+  --tone-bg: #f5f3ff;
+  --tone-border: #ddd6fe;
+}
+
+.tone-confirm {
+  --tone: #0891b2;
+  --tone-bg: #ecfeff;
+  --tone-border: #a5f3fc;
+}
+
+.tone-missing {
+  --tone: #475569;
+  --tone-bg: #f1f5f9;
+  --tone-border: #cbd5e1;
+}
+
+.managerGrid {
+  display: grid;
+  grid-template-columns: minmax(430px, 1.35fr) minmax(260px, 0.82fr) minmax(260px, 0.82fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.managerPanel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  padding: 14px;
+}
+
+.managerPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.managerPanelHead h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.managerPanelHead span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.managerIssueList,
+.riskLiveList,
+.ownerBottlenecks {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.managerIssueList::-webkit-scrollbar,
+.riskLiveList::-webkit-scrollbar,
+.ownerBottlenecks::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.managerIssue,
+.riskLive,
+.ownerBottlenecks button {
+  width: 100%;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--ink);
+  text-align: left;
+}
+
+.managerIssue {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-height: 64px;
+  padding: 10px;
+  overflow: hidden;
+  background: var(--tone-bg);
+  border-color: var(--tone-border, var(--line-soft));
+}
+
+.managerIssue::before,
+.riskLive::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--tone);
+}
+
+.managerIssue strong,
+.riskLive strong,
+.ownerBottlenecks strong {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerIssue span,
+.managerIssue small,
+.riskLive span,
+.ownerBottlenecks span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerIssue small {
+  color: var(--tone);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.riskLive,
+.ownerBottlenecks button {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  min-height: 76px;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.riskLive {
+  background: var(--tone-bg);
+  border-color: var(--tone-border, var(--line-soft));
+}
+
+.riskLive div,
+.ownerBottlenecks div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.riskLive b,
+.ownerBottlenecks b {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.riskLive b {
+  color: var(--tone);
+}
+
+.ownerBottlenecks button:nth-child(1) {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.ownerBottlenecks button:nth-child(2) {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.ownerBottlenecks button:nth-child(3) {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+}
+
+.managerEmpty {
+  display: grid;
+  min-height: 90px;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .liveRail,
@@ -461,10 +778,6 @@ button {
   cursor: pointer;
 }
 
-.taskBody.noSubtasks {
-  cursor: default;
-}
-
 .taskMeta {
   display: flex;
   align-items: center;
@@ -553,6 +866,18 @@ button {
   text-decoration-thickness: 1px;
 }
 
+.subtaskEmpty {
+  display: grid;
+  min-height: 34px;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .subtaskAddForm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 50px;
@@ -572,8 +897,7 @@ button {
   font-weight: 800;
 }
 
-.subtaskAddForm button,
-.subtaskAddToggle {
+.subtaskAddForm button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -585,10 +909,6 @@ button {
   color: var(--teal);
   font-size: 12px;
   font-weight: 900;
-}
-
-.subtaskAddToggle {
-  width: 64px;
 }
 
 .taskOps {
@@ -2040,4 +2360,1189 @@ button {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+.liveManagerView {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.liveManagerSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.riskSummary {
+  position: relative;
+  display: grid;
+  min-height: 76px;
+  padding: 12px 14px 12px 18px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 10px;
+  background: var(--risk-bg);
+  box-shadow: 0 10px 24px rgba(24, 35, 51, 0.06);
+}
+
+.riskSummary::before,
+.managerLiveCard::before,
+.selectedLiveStatus::before,
+.selectedLiveIssue::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--risk);
+}
+
+.riskSummary.high,
+.risk-high {
+  --risk: #dc2626;
+  --risk-bg: #fef2f2;
+  --risk-border: #fecaca;
+}
+
+.riskSummary.warn,
+.risk-warn {
+  --risk: #d97706;
+  --risk-bg: #fffbeb;
+  --risk-border: #fde68a;
+}
+
+.riskSummary.ok,
+.risk-ok {
+  --risk: #0f766e;
+  --risk-bg: #ecfdf5;
+  --risk-border: #99f6e4;
+}
+
+.riskSummary span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.riskSummary b {
+  color: var(--risk);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.riskSummary small {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.liveManagerGrid {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.1fr) minmax(420px, 0.9fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.liveBoardPanel,
+.liveDetailPanel {
+  min-height: 0;
+}
+
+.managerLiveList,
+.selectedLiveIssues {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.managerLiveList::-webkit-scrollbar,
+.selectedLiveIssues::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.managerLiveCard {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  min-height: 98px;
+  padding: 11px 12px 11px 16px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 10px;
+  background: var(--risk-bg);
+  color: var(--ink);
+  text-align: left;
+}
+
+.managerLiveCard.selected {
+  box-shadow: inset 0 0 0 1px var(--risk), 0 10px 22px rgba(24, 35, 51, 0.08);
+}
+
+.managerLiveTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.managerLiveTitle span,
+.selectedLiveStatus span,
+.selectedLiveIssue span {
+  display: block;
+  overflow: hidden;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerLiveTitle strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerLiveTitle em {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--risk);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.managerLiveMetrics,
+.selectedLiveMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.managerLiveMetrics span,
+.selectedLiveMetrics span {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.managerLiveMetrics b,
+.selectedLiveMetrics b {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.liveDetailPanel {
+  gap: 10px;
+}
+
+.selectedLiveStatus {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 11px 10px 16px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 10px;
+  background: var(--risk-bg);
+}
+
+.selectedLiveStatus strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.selectedLiveStatus button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--risk-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.selectedLiveMetrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.selectedLiveIssue {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  min-height: 62px;
+  padding: 9px 9px 9px 14px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 9px;
+  background: var(--risk-bg);
+  color: var(--ink);
+  text-align: left;
+}
+
+.selectedLiveIssue strong {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedLiveIssue small {
+  display: block;
+  margin-top: 3px;
+  color: var(--risk);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+/* Manager view refinement */
+.liveManagerView {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.liveManagerSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.riskSummary {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "number caption"
+    "number label";
+  column-gap: 10px;
+  min-height: 54px;
+  align-items: center;
+  padding: 9px 12px 9px 16px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 8px;
+  background: var(--risk-bg);
+  box-shadow: none;
+}
+
+.riskSummary span {
+  grid-area: caption;
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.riskSummary b {
+  grid-area: number;
+  min-width: 34px;
+  color: var(--risk);
+  font-size: 25px;
+  line-height: 1;
+}
+
+.riskSummary small {
+  grid-area: label;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.liveManagerGrid {
+  display: grid;
+  grid-template-columns: minmax(470px, 1.05fr) minmax(430px, 0.95fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.liveBoardPanel,
+.liveDetailPanel {
+  min-height: 0;
+}
+
+.managerLiveList,
+.selectedLiveIssues {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.managerLiveCard {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  min-height: 82px;
+  padding: 10px 11px 10px 16px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--risk-bg) 72%, #ffffff 28%);
+  color: var(--ink);
+  text-align: left;
+}
+
+.managerLiveCard.selected {
+  box-shadow: inset 0 0 0 1px var(--risk);
+}
+
+.managerLiveTitle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.managerLiveTitle strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerLiveTitle em {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--risk);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.managerLiveReason {
+  margin: 0;
+  overflow: hidden;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerLiveMetrics,
+.selectedLiveMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.managerLiveMetrics span,
+.selectedLiveMetrics span {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--sub);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.managerLiveMetrics b,
+.selectedLiveMetrics b {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.liveDetailPanel {
+  gap: 9px;
+}
+
+.selectedLiveStatus {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 10px 11px 10px 16px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--risk-bg) 70%, #ffffff 30%);
+}
+
+.selectedLiveStatus strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedLiveStatus small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedLiveStatus button {
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid var(--risk-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.selectedLiveMetrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.selectedLiveIssueHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.selectedLiveIssueHead h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.selectedLiveIssueHead span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.selectedLiveIssue {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 9px 8px 14px;
+  overflow: hidden;
+  border: 1px solid var(--risk-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--risk-bg) 68%, #ffffff 32%);
+  color: var(--ink);
+  text-align: left;
+}
+
+.selectedLiveIssue strong {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedLiveIssue small {
+  display: block;
+  margin-top: 2px;
+  color: var(--risk);
+  font-size: 11px;
+  font-weight: 900;
+}
+/* Manager view: group-first board */
+.liveManagerSummary {
+  gap: 8px;
+}
+
+.riskSummary {
+  min-height: 52px;
+  padding: 8px 12px 8px 16px;
+  border-radius: 8px;
+}
+
+.liveManagerGrid {
+  grid-template-columns: minmax(520px, 1.08fr) minmax(430px, 0.92fr);
+  gap: 12px;
+}
+
+.groupedManagerLiveList {
+  gap: 12px;
+}
+
+.managerGroupBlock {
+  display: grid;
+  gap: 7px;
+}
+
+.managerGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.managerGroupHead strong {
+  font-size: 13px;
+}
+
+.managerGroupHead span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.managerLiveCard {
+  gap: 7px;
+  min-height: 112px;
+  padding: 10px 11px 10px 16px;
+  border-radius: 9px;
+}
+
+.managerLiveTitle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.managerLiveTitle strong {
+  font-size: 14px;
+}
+
+.managerContactLine {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.managerContactLine span {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--sub);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.managerContactLine strong {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.managerContactLine small {
+  overflow: hidden;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerLiveMetrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.managerLiveMetrics span {
+  min-height: 28px;
+  padding: 0 4px;
+}
+
+.liveDetailPanel {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.liveDetailPanel .managerPanelHead h3 {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedLiveStatus {
+  min-height: 64px;
+  align-items: center;
+}
+
+.selectedLiveStatus strong {
+  color: var(--risk);
+  font-size: 14px;
+  white-space: normal;
+}
+
+.managerContactPanel {
+  display: grid;
+  grid-template-columns: auto minmax(70px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.managerContactPanel span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.managerContactPanel strong {
+  color: var(--ink);
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.managerContactPanel small {
+  overflow: hidden;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedLiveMetrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.selectedLiveMetrics span {
+  min-height: 30px;
+  padding: 0 4px;
+}
+
+.selectedLiveIssueHead {
+  margin-top: 0;
+}
+
+.selectedLiveIssues {
+  gap: 7px;
+}
+
+.selectedLiveIssue {
+  min-height: 58px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 8px;
+}
+
+.selectedLiveIssue .pill {
+  min-width: 44px;
+  justify-content: center;
+}
+
+.selectedLiveIssue strong,
+.selectedLiveIssue span,
+.selectedLiveIssue small {
+  white-space: nowrap;
+}
+/* Manager issue compact metadata */
+.selectedLiveIssue {
+  min-height: 50px;
+  align-items: center;
+}
+
+.selectedLiveIssue span {
+  margin-top: 2px;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.selectedLiveIssue small {
+  display: none;
+}
+
+.managerContactPanel span {
+  white-space: nowrap;
+}
+/* Manager left board compact cards */
+.managerLiveCard {
+  min-height: 82px;
+  gap: 6px;
+}
+
+.managerLiveReason {
+  margin: 0;
+  overflow: hidden;
+  color: var(--risk);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerContactLine {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.managerContactLine span,
+.managerContactLine strong {
+  display: inline-flex;
+  min-height: 21px;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.managerContactLine span {
+  padding: 0 6px;
+  background: #ffffff;
+  color: var(--sub);
+}
+
+.managerContactLine strong {
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+}
+
+.managerContactPanel {
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 48px;
+}
+
+.managerContactChips {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.managerContactChips b {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.managerContactChips small {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.selectedLiveMetrics span {
+  gap: 3px;
+  font-size: 10px;
+}
+/* Manager contact filter buttons */
+.managerContactChips button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.managerContactChips button.active {
+  border-color: #5eead4;
+  background: #ecfdf5;
+  color: #0f766e;
+  box-shadow: inset 0 0 0 1px #5eead4;
+}
+
+.managerContactChips button small {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.managerContactChips button.active small {
+  color: #0f766e;
+}
+/* Manager summary simplification */
+.riskSummary {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "number label";
+  min-height: 42px;
+  column-gap: 9px;
+  padding: 8px 12px 8px 16px;
+}
+
+.riskSummary span {
+  display: none;
+}
+
+.riskSummary b {
+  grid-area: number;
+  min-width: 28px;
+  font-size: 22px;
+}
+
+.riskSummary small {
+  grid-area: label;
+  font-size: 13px;
+}
+
+.liveDetailPanel {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+}
+/* Manager compact summary in board header */
+.liveManagerView {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.liveManagerGrid {
+  grid-template-columns: minmax(390px, 0.82fr) minmax(520px, 1.18fr);
+}
+
+.managerBoardHead {
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.managerBoardHead .liveManagerSummary {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.managerBoardHead .riskSummary {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 11px;
+  border-radius: 999px;
+}
+
+.managerBoardHead .riskSummary::before {
+  width: 3px;
+}
+
+.managerBoardHead .riskSummary b {
+  min-width: auto;
+  font-size: 13px;
+}
+
+.managerBoardHead .riskSummary small {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.managerLiveCard {
+  min-height: 76px;
+}
+
+.managerLiveTitle strong {
+  font-size: 13px;
+}
+/* Manager balanced columns */
+.liveManagerGrid {
+  grid-template-columns: minmax(450px, 1fr) minmax(450px, 1fr);
+}
+
+.managerGroupHead strong {
+  font-size: 15px;
+}
+/* Manager group filter and inline issue editor */
+.managerGroupFilter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 8px;
+}
+
+.managerGroupFilter span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.managerGroupFilter select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.selectedLiveIssueEntry {
+  display: grid;
+  gap: 6px;
+}
+
+.selectedLiveIssue.active {
+  box-shadow: inset 0 0 0 1px var(--risk);
+}
+
+.managerInlineEditor {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-left: 4px solid #2563eb;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.managerInlineEditorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.managerInlineEditorHead strong {
+  font-size: 13px;
+}
+
+.managerInlineEditorHead span {
+  overflow: hidden;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerInlineEditor .ticketEditor,
+.managerInlineEditor .productionEditor {
+  margin-top: 0;
+}
+
+.managerInlineEditor.taskOnly .primaryButton {
+  min-height: 34px;
+}
+/* Manager board header layout fix */
+.managerBoardHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: 10px;
+}
+
+.managerBoardTitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.managerBoardTitleRow h3 {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.managerGroupFilter {
+  display: block;
+  min-width: 140px;
+  margin: 0;
+}
+
+.managerGroupFilter select {
+  min-height: 30px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.managerBoardHead .liveManagerSummary {
+  justify-content: flex-end;
+}
+
+.managerGroupHead {
+  min-height: 24px;
+}
+.managerNoContact {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #99f6e4;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+}
+.managerNoContact {
+  width: fit-content;
+  min-width: 58px;
+  max-width: max-content;
+  justify-content: center;
+}
+/* Manager read-only issue preview */
+.managerInlineEditor.readonly {
+  border-left-color: var(--risk, #2563eb);
+  background: #ffffff;
+}
+
+.readonlyRows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.readonlyRows div {
+  display: grid;
+  gap: 2px;
+  min-height: 42px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.readonlyRows span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.readonlyRows strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readonlySubtasks {
+  display: grid;
+  gap: 5px;
+}
+
+.readonlySubtasks span {
+  display: block;
+  min-height: 26px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #fff7ed;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.readonlySubtasks span.done {
+  background: #ecfdf5;
+  color: #0f766e;
+}
+/* Compact manager read-only preview */
+.readonlyRows {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.readonlyRows div {
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 6px;
+  min-height: 32px;
+  align-items: center;
+  padding: 6px 8px;
+}
+
+.readonlyRows span {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.readonlyRows strong {
+  font-size: 12px;
+}
+
+.readonlySubtasks {
+  gap: 4px;
+}
+
+.readonlySubtasks span {
+  position: relative;
+  display: flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  background: #ffffff;
+}
+
+.readonlySubtasks span::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #b8c4d5;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.readonlySubtasks span.done::before {
+  border-color: #0f766e;
+  background: #0f766e;
+  box-shadow: inset 0 0 0 3px #ffffff;
 }

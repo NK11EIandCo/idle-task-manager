@@ -26,8 +26,13 @@ type Phase = "イベント" | "チケット" | "企画" | "制作物" | "衣装"
 type LiveType = "ワンマン" | "定期公演" | "生誕祭";
 type TaskView = "未着手" | "進行中" | "完了済み";
 type LiveListView = "未" | "完";
+type AppMode = "work" | "manager";
 type TicketStatus = "未作成" | "作成中" | "確認中" | "公開済";
 type ProductionStatus = "未依頼" | "依頼済" | "制作中" | "確認待ち" | "入稿済" | "納品済";
+type ManagerFilter = "全て" | "遅延" | "今日" | "3日以内" | "外注" | "確認待ち";
+type ManagerIssueKind = "遅延" | "今日" | "3日以内" | "外注" | "確認待ち" | "未入力";
+type ManagerRisk = "high" | "warn" | "ok";
+type ManagerContact = { owner: string; count: number; reason: string; score: number };
 
 type SubTask = {
   id: string;
@@ -110,6 +115,23 @@ type DragTask = {
   liveId: string;
   taskId: string;
   title: string;
+};
+
+type ManagerIssue = {
+  id: string;
+  kind: ManagerIssueKind;
+  tags: ManagerFilter[];
+  group: string;
+  liveId: string;
+  liveTitle: string;
+  owner: string;
+  title: string;
+  detail: string;
+  date?: string;
+  taskId?: string;
+  ticketId?: string;
+  productionItemId?: string;
+  priority: number;
 };
 
 const groupPages = [
@@ -364,7 +386,7 @@ const initialProjects: LiveProject[] = [
   {
     id: "live-nova-summer",
     group: "Nova Belles",
-    title: "Summer One-man",
+    title: "夏のワンマンライブ",
     venue: "Zepp Shinjuku",
     eventDate: "2026-07-20",
     status: "進行中",
@@ -421,7 +443,7 @@ const initialProjects: LiveProject[] = [
   {
     id: "live-nova-birthday",
     group: "Nova Belles",
-    title: "Mio Birthday Live",
+    title: "美緒 生誕祭",
     venue: "新宿BLAZE",
     eventDate: "2026-08-08",
     status: "計画",
@@ -431,10 +453,8 @@ const initialProjects: LiveProject[] = [
     rehearsal: "2026-08-06T15:00 @ 新宿リハーサルスタジオ",
     photoShoot: "2026-07-13T10:00 @ 目黒スタジオ",
     productionCompany: "Orbit Live Works",
-    tasks: applyStatuses(generateTasks("live-nova-birthday", "2026-08-08"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "未着手",
+    tasks: updateDemoTasks(completeTasks(generateTasks("live-nova-birthday", "2026-08-08")), {
+      当日バイト手配: { status: "進行中", dueDate: addDays(today, 2) },
     }),
     tickets: defaultTickets("2026-07-10T21:00", "生誕祭"),
     productionItems: defaultProductionItems("2026-08-08"),
@@ -489,7 +509,7 @@ const initialProjects: LiveProject[] = [
   {
     id: "live-lumiere-summer",
     group: "Lumiere",
-    title: "Summer Showcase",
+    title: "夏のショーケース",
     venue: "白金高輪SELENE b2",
     eventDate: "2026-07-05",
     status: "進行中",
@@ -511,7 +531,7 @@ const initialProjects: LiveProject[] = [
   {
     id: "live-asteria-debut",
     group: "Asteria",
-    title: "Debut Showcase",
+    title: "デビューお披露目ライブ",
     venue: "代官山UNIT",
     eventDate: "2026-06-22",
     status: "進行中",
@@ -553,7 +573,7 @@ const initialProjects: LiveProject[] = [
   {
     id: "live-prism-note-release",
     group: "Prism Note",
-    title: "New Single Release Live",
+    title: "新曲リリースライブ",
     venue: "Veats Shibuya",
     eventDate: "2026-07-12",
     status: "進行中",
@@ -593,7 +613,7 @@ const initialProjects: LiveProject[] = [
   {
     id: "live-mirai-palette-first",
     group: "Mirai Palette",
-    title: "First Color Live",
+    title: "初単独ライブ",
     venue: "恵比寿LIQUIDROOM",
     eventDate: "2026-06-30",
     status: "進行中",
@@ -625,17 +645,19 @@ const initialProjects: LiveProject[] = [
     rehearsal: "2026-07-24T14:00 @ 新宿スタジオ",
     photoShoot: "2026-07-02T11:00 @ 目黒スタジオ",
     productionCompany: "Palette Works",
-    tasks: applyStatuses(generateTasks("live-mirai-palette-regular", "2026-07-26"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "進行中",
-    }),
-    tickets: defaultTickets("2026-07-09T20:00", "定期公演"),
-    productionItems: defaultProductionItems("2026-07-26"),
+    tasks: completeTasks(generateTasks("live-mirai-palette-regular", "2026-07-26")),
+    tickets: publishTickets(defaultTickets("2026-07-09T20:00", "定期公演")),
+    productionItems: completeProductionItems(defaultProductionItems("2026-07-26")),
   },
 ];
 
 function App() {
   const [projects, setProjects] = useState(initialProjects);
+  const [appMode, setAppMode] = useState<AppMode>("work");
+  const [managerGroupFilter, setManagerGroupFilter] = useState("全グループ");
+  const [selectedManagerLiveId, setSelectedManagerLiveId] = useState(initialProjects[0].id);
+  const [managerContactFilter, setManagerContactFilter] = useState("全員");
+  const [selectedManagerIssueId, setSelectedManagerIssueId] = useState("");
   const [activeGroup, setActiveGroup] = useState(groupPages[0].name);
   const [selectedLiveId, setSelectedLiveId] = useState(initialProjects[0].id);
   const [taskView, setTaskView] = useState<TaskView>("未着手");
@@ -769,6 +791,34 @@ function App() {
     進行中: ownerFilteredTasks.filter((task) => matchesTaskView(task, "進行中")).length,
     完了済み: ownerFilteredTasks.filter((task) => matchesTaskView(task, "完了済み")).length,
   };
+
+  function openManagerIssue(issue: ManagerIssue) {
+    const project = projects.find((currentProject) => currentProject.id === issue.liveId);
+    const task = project?.tasks.find((currentTask) => currentTask.id === issue.taskId);
+
+    setAppMode("work");
+    setIsDrawerOpen(false);
+    setActiveGroup(issue.group);
+    setSelectedLiveId(issue.liveId);
+    setLiveListView(project?.status === "完了" ? "完" : "未");
+    setTaskOwnerFilter("全員");
+    setQuery("");
+
+    if (task) {
+      const key = `${issue.liveId}-${task.id}`;
+      setTaskView(taskViewFromStatus(task.status));
+      setSelectedTaskKey(key);
+      window.setTimeout(() => {
+        document.getElementById(`task-${key}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 80);
+      return;
+    }
+
+    setSelectedTaskKey(null);
+  }
 
   function updateTaskScrollHint() {
     const element = taskListRef.current;
@@ -1010,9 +1060,42 @@ function App() {
             <h1>グループ別ライブ管理</h1>
           </div>
         </div>
+        <div className="modeSwitch" aria-label="表示切り替え">
+          <button
+            className={appMode === "work" ? "active" : ""}
+            onClick={() => setAppMode("work")}
+            type="button"
+          >
+            作業
+          </button>
+          <button
+            className={appMode === "manager" ? "active" : ""}
+            onClick={() => {
+              setIsDrawerOpen(false);
+              setAppMode("manager");
+            }}
+            type="button"
+          >
+            管理
+          </button>
+        </div>
       </header>
 
-      <main className="groupPage">
+      <main className={appMode === "manager" ? "managerPage" : "groupPage"}>
+        {appMode === "manager" ? (
+          <ManagerView
+            managerContactFilter={managerContactFilter}
+            managerGroupFilter={managerGroupFilter}
+            projects={projects}
+            selectedManagerIssueId={selectedManagerIssueId}
+            selectedManagerLiveId={selectedManagerLiveId}
+            setManagerContactFilter={setManagerContactFilter}
+            setManagerGroupFilter={setManagerGroupFilter}
+            setSelectedManagerIssueId={setSelectedManagerIssueId}
+            setSelectedManagerLiveId={setSelectedManagerLiveId}
+            onOpenIssue={openManagerIssue}
+          />
+        ) : (
         <section className="workGrid">
           <aside className="liveRail">
             <section className="sidePanel">
@@ -1114,11 +1197,8 @@ function App() {
                   }
 
                   const key = `${item.liveId}-${item.taskId}`;
-                  const linkedTask = projects
-                    .find((project) => project.id === item.liveId)
-                    ?.tasks.find((task) => task.id === item.taskId);
                   setTaskView(taskViewFromStatus(item.taskStatus ?? "未着手"));
-                  setSelectedTaskKey(linkedTask?.subtasks?.length ? key : null);
+                  setSelectedTaskKey(key);
                   window.setTimeout(() => {
                     document.getElementById(`task-${key}`)?.scrollIntoView({
                       behavior: "smooth",
@@ -1331,11 +1411,475 @@ function App() {
             )}
           </section>
         </section>
+        )}
       </main>
     </div>
   );
 }
 
+function ManagerView({
+  managerContactFilter,
+  managerGroupFilter,
+  projects,
+  selectedManagerIssueId,
+  selectedManagerLiveId,
+  setManagerContactFilter,
+  setManagerGroupFilter,
+  setSelectedManagerIssueId,
+  setSelectedManagerLiveId,
+  onOpenIssue,
+}: {
+  managerContactFilter: string;
+  managerGroupFilter: string;
+  projects: LiveProject[];
+  selectedManagerIssueId: string;
+  selectedManagerLiveId: string;
+  setManagerContactFilter: (value: string | ((current: string) => string)) => void;
+  setManagerGroupFilter: (value: string) => void;
+  setSelectedManagerIssueId: (value: string | ((current: string) => string)) => void;
+  setSelectedManagerLiveId: (value: string) => void;
+  onOpenIssue: (issue: ManagerIssue) => void;
+}) {
+  const issues = useMemo(() => createManagerIssues(projects), [projects]);
+  const activeProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          project.status !== "完了" &&
+          (managerGroupFilter === "全グループ" || project.group === managerGroupFilter),
+      ),
+    [managerGroupFilter, projects],
+  );
+  const liveSummaries = useMemo(
+    () =>
+      activeProjects
+        .map((project) => {
+          const projectIssues = issues.filter((issue) => issue.liveId === project.id);
+          const late = projectIssues.filter((issue) => issue.tags.includes("遅延")).length;
+          const todayCount = projectIssues.filter((issue) => issue.tags.includes("今日")).length;
+          const soon = projectIssues.filter((issue) => issue.tags.includes("3日以内")).length;
+          const confirm = projectIssues.filter((issue) => issue.tags.includes("確認待ち")).length;
+          const external = projectIssues.filter((issue) => issue.tags.includes("外注")).length;
+          const requiredOpen = project.tasks.filter(
+            (task) => task.priority === "必須" && task.status !== "完了",
+          ).length;
+          const score = late * 5 + todayCount * 4 + soon * 2 + confirm * 2 + external + requiredOpen * 2;
+          const risk: ManagerRisk =
+            late > 0 || requiredOpen >= 3
+              ? "high"
+              : todayCount > 0 || soon > 0 || confirm > 0 || external > 0 || requiredOpen > 0
+                ? "warn"
+                : "ok";
+          const contacts = contactBreakdown(projectIssues, project.manager);
+          return {
+            project,
+            issues: projectIssues,
+            late,
+            today: todayCount,
+            soon,
+            confirm,
+            external,
+            requiredOpen,
+            contacts,
+            score,
+            risk,
+          };
+        })
+        .sort((a, b) => b.score - a.score || daysUntil(a.project.eventDate) - daysUntil(b.project.eventDate)),
+    [activeProjects, issues],
+  );
+  const selectedLive = liveSummaries.find((item) => item.project.id === selectedManagerLiveId) ?? liveSummaries[0];
+  const filteredSelectedIssues =
+    selectedLive && managerContactFilter !== "全員"
+      ? selectedLive.issues.filter((issue) => issue.owner === managerContactFilter)
+      : selectedLive?.issues ?? [];
+  const selectedManagerIssue = filteredSelectedIssues.find((issue) => issue.id === selectedManagerIssueId);
+  const summaryCounts = {
+    high: liveSummaries.filter((item) => item.risk === "high").length,
+    warn: liveSummaries.filter((item) => item.risk === "warn").length,
+    ok: liveSummaries.filter((item) => item.risk === "ok").length,
+  };
+  const groupedSummaries = groupPages
+    .map((group) => ({
+      group,
+      items: liveSummaries.filter((item) => item.project.group === group.name),
+    }))
+    .filter((section) => section.items.length > 0);
+  const managerStates: Array<{ risk: ManagerRisk; className: string; label: string; count: number }> = [
+    { risk: "high", className: "high", label: "要介入", count: summaryCounts.high },
+    { risk: "warn", className: "warn", label: "注意", count: summaryCounts.warn },
+    { risk: "ok", className: "ok", label: "順調", count: summaryCounts.ok },
+  ];
+  const getPrimaryReason = (item: (typeof liveSummaries)[number]) => {
+    if (item.late > 0) return `${item.late}件の遅延が止まっています`;
+    if (item.requiredOpen > 0) return `${item.requiredOpen}件の必須タスクが未完です`;
+    if (item.today + item.soon > 0) return `${item.today + item.soon}件が3日以内に締切です`;
+    if (item.confirm > 0) return `${item.confirm}件が確認待ちです`;
+    if (item.external > 0) return `${item.external}件が外注先で進行中です`;
+    return "現時点で目立つ停止要因はありません";
+  };
+
+  useEffect(() => {
+    if (!liveSummaries.length) {
+      setSelectedManagerLiveId("");
+      return;
+    }
+    if (!liveSummaries.some((item) => item.project.id === selectedManagerLiveId)) {
+      setSelectedManagerLiveId(liveSummaries[0].project.id);
+    }
+    if (managerContactFilter !== "全員" && !liveSummaries.find((item) => item.project.id === selectedManagerLiveId)?.contacts.some((contact) => contact.owner === managerContactFilter)) {
+      setManagerContactFilter("全員");
+    }
+    if (selectedManagerIssueId && !filteredSelectedIssues.some((issue) => issue.id === selectedManagerIssueId)) {
+      setSelectedManagerIssueId("");
+    }
+  }, [filteredSelectedIssues, liveSummaries, managerContactFilter, selectedManagerIssueId, selectedManagerLiveId]);
+
+  return (
+    <section className="managerView liveManagerView">
+      <div className="liveManagerGrid">
+        <section className="managerPanel liveBoardPanel">
+          <div className="managerPanelHead managerBoardHead">
+            <div className="managerBoardTitleRow">
+              <h3>ライブ別状況</h3>
+              <label className="managerGroupFilter">
+                <select
+                  value={managerGroupFilter}
+                  onChange={(event) => {
+                    setManagerGroupFilter(event.target.value);
+                    setManagerContactFilter("全員");
+                    setSelectedManagerIssueId("");
+                  }}
+                >
+                  <option>全グループ</option>
+                  {groupPages.map((group) => (
+                    <option key={group.name}>{group.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="liveManagerSummary">
+              {managerStates.map((state) => (
+                <div className={`riskSummary ${state.className}`} key={state.risk}>
+                  <b>{state.count}</b>
+                  <small>{state.label}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="managerLiveList groupedManagerLiveList">
+            {groupedSummaries.map((section) => (
+              <div className="managerGroupBlock" key={section.group.name}>
+                <div className="managerGroupHead">
+                  <strong>{section.group.name}</strong>
+                  <span>{section.items.length}ライブ</span>
+                </div>
+                {section.items.map((item) => (
+                  <button
+                    className={`managerLiveCard risk-${item.risk} ${selectedLive?.project.id === item.project.id ? "selected" : ""}`}
+                    key={item.project.id}
+                    onClick={() => {
+                      setSelectedManagerLiveId(item.project.id);
+                      setManagerContactFilter("全員");
+                      setSelectedManagerIssueId("");
+                    }}
+                    type="button"
+                  >
+                    <div className="managerLiveTitle">
+                      <div>
+                        <span>{formatDate(item.project.eventDate)} @{item.project.venue}</span>
+                        <strong>{item.project.title}</strong>
+                      </div>
+                      <em>{riskLabel(item.risk)}</em>
+                    </div>
+                    <p className="managerLiveReason">{getPrimaryReason(item)}</p>
+                    {item.contacts.length > 0 && (
+                      <div className="managerContactLine">
+                        <span>連絡</span>
+                        {item.contacts.slice(0, 3).map((contact) => (
+                          <strong key={contact.owner}>{contact.owner}</strong>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+            {liveSummaries.length === 0 && <div className="managerEmpty">表示するライブはありません</div>}
+          </div>
+        </section>
+
+        <section className="managerPanel liveDetailPanel">
+          <div className="managerPanelHead">
+            <h3>{selectedLive ? `${formatDate(selectedLive.project.eventDate)} ${selectedLive.project.title}` : "ライブ詳細"}</h3>
+            {selectedLive && <span>{riskLabel(selectedLive.risk)}</span>}
+          </div>
+          {selectedLive ? (
+            <>
+              <div className={`selectedLiveStatus risk-${selectedLive.risk}`}>
+                <div>
+                  <span>{selectedLive.project.group} @{selectedLive.project.venue}</span>
+                  <strong>{getPrimaryReason(selectedLive)}</strong>
+                </div>
+                <button
+                  onClick={() =>
+                    onOpenIssue({
+                      id: `${selectedLive.project.id}-open`,
+                      kind: selectedLive.risk === "high" ? "遅延" : "今日",
+                      tags: ["全て"],
+                      group: selectedLive.project.group,
+                      liveId: selectedLive.project.id,
+                      liveTitle: selectedLive.project.title,
+                      owner: selectedLive.project.manager,
+                      title: selectedLive.project.title,
+                      detail: "ライブ詳細を確認",
+                      priority: 0,
+                    })
+                  }
+                  type="button"
+                >
+                  作業画面で開く
+                </button>
+              </div>
+
+              <div className="managerContactPanel">
+                <span>優先連絡先</span>
+                {selectedLive.contacts.length > 0 ? (
+                  <div className="managerContactChips">
+                    <button
+                      className={managerContactFilter === "全員" ? "active" : ""}
+                      onClick={() => setManagerContactFilter("全員")}
+                      type="button"
+                    >
+                      全員
+                      <small>{selectedLive.issues.length}件</small>
+                    </button>
+                    {selectedLive.contacts.map((contact) => (
+                      <button
+                        className={managerContactFilter === contact.owner ? "active" : ""}
+                        key={contact.owner}
+                        onClick={() =>
+                          setManagerContactFilter((current) => (current === contact.owner ? "全員" : contact.owner))
+                        }
+                        title={contact.reason}
+                        type="button"
+                      >
+                        {contact.owner}
+                        <small>{contact.count}件</small>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="managerNoContact">連絡不要</div>
+                )}
+              </div>
+
+
+              <div className="selectedLiveIssueHead">
+                <h4>止まっている原因</h4>
+                <span>{filteredSelectedIssues.length}件</span>
+              </div>
+              <div className="selectedLiveIssues">
+                {filteredSelectedIssues.map((issue) => (
+                  <div className="selectedLiveIssueEntry" key={issue.id}>
+                    <button
+                      className={`selectedLiveIssue risk-${issueRisk(issue)} ${selectedManagerIssueId === issue.id ? "active" : ""}`}
+                      onClick={() =>
+                        setSelectedManagerIssueId((current) => (current === issue.id ? "" : issue.id))
+                      }
+                      type="button"
+                    >
+                      <StatusPill value={issue.kind} />
+                      <div>
+                        <strong>{issue.title}</strong>
+                        <span>
+                          連絡: {issue.owner}
+                          {issue.date ? ` / 期日 ${formatDate(issue.date)}` : ""}
+                          {issue.detail ? ` / ${issue.detail}` : ""}
+                        </span>
+                      </div>
+                    </button>
+                    {selectedManagerIssue?.id === issue.id && (
+                      <ManagerIssueEditor
+                        issue={issue}
+                        project={selectedLive.project}
+                        onOpenIssue={onOpenIssue}
+                      />
+                    )}
+                  </div>
+                ))}
+                {filteredSelectedIssues.length === 0 && (
+                  <div className="managerEmpty">該当する停止原因はありません</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="managerEmpty">ライブを選択してください</div>
+          )}
+        </section>
+      </div>
+    </section>
+  );
+}
+function ManagerIssueEditor({
+  issue,
+  project,
+  onOpenIssue,
+}: {
+  issue: ManagerIssue;
+  project: LiveProject;
+  onOpenIssue: (issue: ManagerIssue) => void;
+}) {
+  const ticket = issue.ticketId ? project.tickets.find((current) => current.id === issue.ticketId) : undefined;
+  const productionItem = issue.productionItemId
+    ? project.productionItems.find((current) => current.id === issue.productionItemId)
+    : undefined;
+  const task = issue.taskId ? project.tasks.find((current) => current.id === issue.taskId) : undefined;
+
+  if (ticket) {
+    return (
+      <div className="managerInlineEditor readonly">
+        <div className="managerInlineEditorHead">
+          <strong>チケット情報</strong>
+        </div>
+        <ReadOnlyRows
+          rows={[
+            ["価格", `${ticket.price.toLocaleString("ja-JP")}円`],
+            ["状態", ticketStatus(ticket)],
+            ["URL", ticket.pageUrl || "未入力"],
+            ["特典", ticket.benefit || "未入力"],
+          ]}
+        />
+        <button className="primaryButton full" onClick={() => onOpenIssue(issue)} type="button">
+          作業画面で開く
+        </button>
+      </div>
+    );
+  }
+
+  if (productionItem) {
+    return (
+      <div className="managerInlineEditor readonly">
+        <div className="managerInlineEditorHead">
+          <strong>制作物情報</strong>
+        </div>
+        <ReadOnlyRows
+          rows={[
+            ["外注先", productionItem.vendor],
+            ["状態", productionItem.status],
+            ["URL", productionItem.fileUrl || "未入力"],
+          ]}
+        />
+        <button className="primaryButton full" onClick={() => onOpenIssue(issue)} type="button">
+          作業画面で開く
+        </button>
+      </div>
+    );
+  }
+
+  if (task) {
+    return (
+      <div className="managerInlineEditor readonly">
+        <div className="managerInlineEditorHead">
+          <strong>タスク情報</strong>
+        </div>
+        <ReadOnlyRows
+          rows={[
+            ["カテゴリ", task.phase],
+            ["状態", task.status],
+            ["重要度", task.priority],
+            ["メモ", task.memo || "なし"],
+          ]}
+        />
+        {task.subtasks && task.subtasks.length > 0 && (
+          <div className="readonlySubtasks">
+            {task.subtasks.map((subtask) => (
+              <span className={subtask.done ? "done" : ""} key={subtask.id}>
+                {subtask.title}
+              </span>
+            ))}
+          </div>
+        )}
+        <button className="primaryButton full" onClick={() => onOpenIssue(issue)} type="button">
+          作業画面で開く
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="managerInlineEditor readonly">
+      <div className="managerInlineEditorHead">
+        <strong>詳細を確認</strong>
+        <span>{issue.title}</span>
+      </div>
+      <button className="primaryButton full" onClick={() => onOpenIssue(issue)} type="button">
+        作業画面で開く
+      </button>
+    </div>
+  );
+}
+
+function ReadOnlyRows({ rows }: { rows: Array<[string, string]> }) {
+  return (
+    <div className="readonlyRows">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+function riskLabel(risk: string) {
+  if (risk === "high") return "要介入";
+  if (risk === "warn") return "注意";
+  return "順調";
+}
+
+function contactBreakdown(issues: ManagerIssue[], fallback: string): ManagerContact[] {
+  void fallback;
+  if (issues.length === 0) return [];
+  const contacts = new Map<string, { count: number; late: number; today: number; confirm: number; external: number; score: number }>();
+  issues.forEach((issue) => {
+    const current = contacts.get(issue.owner) ?? { count: 0, late: 0, today: 0, confirm: 0, external: 0, score: 0 };
+    const late = issue.tags.includes("遅延") ? 1 : 0;
+    const todayIssue = issue.tags.includes("今日") ? 1 : 0;
+    const confirm = issue.tags.includes("確認待ち") ? 1 : 0;
+    const external = issue.tags.includes("外注") ? 1 : 0;
+    current.count += 1;
+    current.late += late;
+    current.today += todayIssue;
+    current.confirm += confirm;
+    current.external += external;
+    current.score += late * 5 + todayIssue * 3 + confirm * 3 + external + 1;
+    contacts.set(issue.owner, current);
+  });
+  return [...contacts.entries()]
+    .map(([owner, value]) => ({
+      owner,
+      count: value.count,
+      reason: contactReasonFromCounts(value),
+      score: value.score,
+    }))
+    .sort((a, b) => b.score - a.score || b.count - a.count)
+    .slice(0, 3);
+}
+
+function contactReasonFromCounts(value: { count: number; late: number; today: number; confirm: number; external: number }) {
+  if (value.late > 0) return `${value.late}件の遅延が集中しています`;
+  if (value.today > 0) return `${value.today}件が今日締切です`;
+  if (value.confirm > 0) return `${value.confirm}件が制作確認待ちです`;
+  if (value.external > 0) return `${value.external}件が外注対応中です`;
+  return `${value.count}件の確認項目があります`;
+}
+
+function issueRisk(issue: ManagerIssue) {
+  if (issue.tags.includes("遅延")) return "high";
+  if (issue.tags.includes("今日") || issue.tags.includes("3日以内") || issue.tags.includes("確認待ち")) return "warn";
+  return "ok";
+}
 function GroupList({
   activeGroup,
   groups,
@@ -1422,24 +1966,20 @@ function TaskRow({
   onSubtaskAdd: (title: string) => void;
 }) {
   const [subtaskDraft, setSubtaskDraft] = useState("");
-  const [isAddingFirstSubtask, setIsAddingFirstSubtask] = useState(false);
   const subtaskStats = getSubtaskStats(task);
   const hasSubtasks = Boolean(task.subtasks?.length);
-  const showSubtaskPanel = (selected && hasSubtasks) || isAddingFirstSubtask;
   const addDraftSubtask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const title = subtaskDraft.trim();
     if (!title) return;
     onSubtaskAdd(title);
     setSubtaskDraft("");
-    setIsAddingFirstSubtask(false);
-    if (!hasSubtasks) onSelectLive();
   };
 
   return (
     <article
       className={`taskRow ${isLate(task) ? "late" : ""} ${task.status === "完了" ? "done" : ""} ${
-        selected && hasSubtasks ? "selected" : ""
+        selected ? "selected" : ""
       }`}
       id={`task-${task.liveId}-${task.id}`}
     >
@@ -1447,11 +1987,8 @@ function TaskRow({
         {task.status === "完了" && <Check size={15} />}
       </button>
       <button
-        aria-disabled={!hasSubtasks}
-        className={`taskBody ${hasSubtasks ? "selectable" : "noSubtasks"}`}
-        onClick={() => {
-          if (hasSubtasks) onSelectLive();
-        }}
+        className="taskBody selectable"
+        onClick={onSelectLive}
         type="button"
       >
         <div className="taskMeta">
@@ -1480,30 +2017,24 @@ function TaskRow({
           </select>
           <ChevronDown size={14} />
         </label>
-        {!hasSubtasks && (
-          <button
-            className="subtaskAddToggle"
-            onClick={() => setIsAddingFirstSubtask((current) => !current)}
-            type="button"
-          >
-            <Plus size={13} />
-            サブ
-          </button>
-        )}
       </div>
-      {showSubtaskPanel && (
+      {selected && (
         <div className="subtaskPanel">
-          {task.subtasks?.map((subtask) => (
-            <button
-              className={subtask.done ? "done" : ""}
-              key={subtask.id}
-              onClick={() => onSubtaskToggle(subtask.id)}
-              type="button"
-            >
-              <span>{subtask.done && <Check size={13} />}</span>
-              <b>{subtask.title}</b>
-            </button>
-          ))}
+          {hasSubtasks ? (
+            task.subtasks?.map((subtask) => (
+              <button
+                className={subtask.done ? "done" : ""}
+                key={subtask.id}
+                onClick={() => onSubtaskToggle(subtask.id)}
+                type="button"
+              >
+                <span>{subtask.done && <Check size={13} />}</span>
+                <b>{subtask.title}</b>
+              </button>
+            ))
+          ) : (
+            <div className="subtaskEmpty">サブタスクはありません</div>
+          )}
           <form className="subtaskAddForm" onSubmit={addDraftSubtask}>
             <input
               value={subtaskDraft}
@@ -2338,7 +2869,7 @@ function DueBadge({ date, done }: { date: string; done: boolean }) {
 
 function StatusPill({ value }: { value: string }) {
   const tone =
-    value === "遅延" || value === "未依頼" || value === "未作成"
+    value === "遅延" || value === "未依頼" || value === "未作成" || value === "未入力"
       ? "danger"
       : value === "注意" || value === "制作中" || value === "確認待ち" || value === "作成中" || value === "確認中"
         ? "warn"
@@ -2350,6 +2881,149 @@ function StatusPill({ value }: { value: string }) {
 
 function ticketStatus(ticket: TicketPlan): TicketStatus {
   return ticket.status ?? (ticket.pageUrl ? "公開済" : "未作成");
+}
+
+function createManagerIssues(projects: LiveProject[]): ManagerIssue[] {
+  return projects
+    .filter((project) => project.status !== "完了")
+    .flatMap((project) => {
+      const taskIssues = project.tasks.flatMap((task) => {
+        if (task.status === "完了") return [];
+        const days = daysUntil(task.dueDate);
+        const tags: ManagerFilter[] = [];
+        let kind: ManagerIssueKind | null = null;
+        let detail = "";
+        let priority = 0;
+
+        if (days < 0) {
+          tags.push("遅延");
+          kind = "遅延";
+          detail = `${Math.abs(days)}日遅れ`;
+          priority += 100 + Math.abs(days);
+        } else if (days === 0) {
+          tags.push("今日");
+          kind = "今日";
+          detail = "今日締切";
+          priority += 80;
+        } else if (days <= 3) {
+          tags.push("3日以内");
+          kind = "3日以内";
+          detail = `あと${days}日`;
+          priority += 60 - days;
+        }
+
+        if (task.owner === "外注") {
+          tags.push("外注");
+          kind ??= "外注";
+          detail ||= "外注対応中";
+          priority += 12;
+        }
+
+        if (!kind) return [];
+
+        return [
+          {
+            id: `${project.id}-${task.id}`,
+            kind,
+            tags,
+            group: project.group,
+            liveId: project.id,
+            liveTitle: project.title,
+            taskId: task.id,
+            owner: task.owner,
+            title: task.title,
+            detail,
+            date: task.dueDate,
+            priority,
+          },
+        ];
+      });
+
+      const ticketIssues = project.tickets.flatMap((ticket) => {
+        const saleDays = daysUntil(ticket.saleStart);
+        const status = ticketStatus(ticket);
+        if (ticket.pageUrl || status === "公開済" || saleDays > 3) return [];
+        const tags: ManagerFilter[] = saleDays < 0 ? ["遅延"] : saleDays === 0 ? ["今日"] : ["3日以内"];
+        return [
+          {
+            id: `${project.id}-${ticket.id}-url`,
+            kind: "未入力" as ManagerIssueKind,
+            tags,
+            group: project.group,
+            liveId: project.id,
+            liveTitle: project.title,
+            owner: project.manager,
+            title: `${ticket.name} チケットURL未入力`,
+            detail: saleDays < 0 ? `発売日から${Math.abs(saleDays)}日経過` : `発売まであと${saleDays}日`,
+            date: ticket.saleStart,
+            ticketId: ticket.id,
+            priority: saleDays < 0 ? 95 + Math.abs(saleDays) : 55 - saleDays,
+          },
+        ];
+      });
+
+      const productionIssues = project.productionItems.flatMap((item) => {
+        if (item.status === "納品済") return [];
+        const tags: ManagerFilter[] = [];
+        let kind: ManagerIssueKind | null = null;
+        let detail = "";
+        let priority = 0;
+        const external = item.vendor !== "社内" && item.vendor !== "未設定";
+
+        if (isProductionLate(item)) {
+          tags.push("遅延");
+          kind = "遅延";
+          detail = `${Math.abs(daysUntil(item.dueDate))}日遅れ`;
+          priority += 100 + Math.abs(daysUntil(item.dueDate));
+        }
+
+        if (item.status === "確認待ち") {
+          tags.push("確認待ち");
+          kind ??= "確認待ち";
+          detail ||= "確認待ち";
+          priority += 45;
+        }
+
+        if (external || item.owner === "外注") {
+          tags.push("外注");
+          kind ??= "外注";
+          detail ||= `${item.vendor}で進行中`;
+          priority += 12;
+        }
+
+        if (!kind) return [];
+
+        return [
+          {
+            id: `${project.id}-${item.id}`,
+            kind,
+            tags,
+            group: project.group,
+            liveId: project.id,
+            liveTitle: project.title,
+            owner: item.owner,
+            title: item.name,
+            detail,
+            date: item.dueDate,
+            productionItemId: item.id,
+            priority,
+          },
+        ];
+      });
+
+      return [...taskIssues, ...ticketIssues, ...productionIssues];
+    })
+    .sort((a, b) => b.priority - a.priority || (a.date ?? "").localeCompare(b.date ?? ""));
+}
+
+function managerToneClass(value: ManagerFilter | ManagerIssueKind) {
+  if (value === "遅延") return "tone-late";
+  if (value === "今日") return "tone-today";
+  if (value === "3日以内") return "tone-soon";
+  if (value === "外注") return "tone-external";
+  if (value === "確認待ち") return "tone-confirm";
+  if (value === "未入力") return "tone-missing";
+  return "tone-all";
 }
 
 function isProductionLate(item: ProductionItem) {
@@ -2380,6 +3054,37 @@ function generateTasks(projectId: string, eventDate: string): Task[] {
 
 function applyStatuses(tasks: Task[], statuses: Record<string, TaskStatus>) {
   return tasks.map((task) => updateTaskStatusValue(task, statuses[task.title] ?? task.status));
+}
+
+function completeTasks(tasks: Task[]) {
+  return tasks.map((task) => updateTaskStatusValue(task, "完了"));
+}
+
+function updateDemoTasks(
+  tasks: Task[],
+  updates: Record<string, Partial<Pick<Task, "status" | "dueDate" | "owner">>>,
+) {
+  return tasks.map((task) => {
+    const update = updates[task.title];
+    if (!update) return task;
+    return updateTaskStatusValue({ ...task, ...update }, update.status ?? task.status);
+  });
+}
+
+function publishTickets(tickets: TicketPlan[]) {
+  return tickets.map((ticket) => ({
+    ...ticket,
+    pageUrl: ticket.pageUrl ?? `https://example.com/tickets/${ticket.id}`,
+    status: "公開済" as TicketStatus,
+  }));
+}
+
+function completeProductionItems(items: ProductionItem[]) {
+  return items.map((item) => ({
+    ...item,
+    status: "納品済" as ProductionStatus,
+    fileUrl: item.fileUrl ?? `https://example.com/production/${item.id}`,
+  }));
 }
 
 function buildSubtasks(taskId: string, title: string): SubTask[] | undefined {
