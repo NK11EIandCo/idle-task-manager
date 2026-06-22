@@ -11,7 +11,9 @@ import {
   CopyPlus,
   PackageCheck,
   Plus,
+  Printer,
   Search,
+  Send,
   Sparkles,
   Ticket,
   UserRound,
@@ -29,6 +31,7 @@ type LiveListView = "未" | "完";
 type AppMode = "work" | "manager";
 type TicketStatus = "未作成" | "作成中" | "確認中" | "公開済";
 type ProductionStatus = "未依頼" | "依頼済" | "制作中" | "確認待ち" | "入稿済" | "納品済";
+type RunScheduleDay = "前日" | "当日";
 type ManagerFilter = "全て" | "遅延" | "今日" | "3日以内" | "外注" | "確認待ち";
 type ManagerIssueKind = "遅延" | "今日" | "3日以内" | "外注" | "確認待ち" | "未入力";
 type ManagerRisk = "high" | "warn" | "ok";
@@ -72,6 +75,16 @@ type ProductionItem = {
   fileUrl?: string;
 };
 
+type RunScheduleItem = {
+  id: string;
+  day: RunScheduleDay;
+  time: string;
+  title: string;
+  owner: string;
+  place: string;
+  note?: string;
+};
+
 type LiveProject = {
   id: string;
   group: string;
@@ -88,6 +101,7 @@ type LiveProject = {
   tasks: Task[];
   tickets: TicketPlan[];
   productionItems: ProductionItem[];
+  scheduleItems?: RunScheduleItem[];
 };
 
 type NewLiveForm = {
@@ -673,6 +687,7 @@ function App() {
   const taskListRef = useRef<HTMLDivElement | null>(null);
   const actionColumnRef = useRef<HTMLElement | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [newLive, setNewLive] = useState<NewLiveForm>({
     group: groupPages[0].name,
     title: "",
@@ -974,6 +989,13 @@ function App() {
     }));
   }
 
+  function updateScheduleItems(projectId: string, scheduleItems: RunScheduleItem[]) {
+    updateProject(projectId, (project) => ({
+      ...project,
+      scheduleItems,
+    }));
+  }
+
   function moveTaskDueDate(projectId: string, taskId: string, dueDate: string) {
     const targetTask = projects.find((project) => project.id === projectId)?.tasks.find((task) => task.id === taskId);
     updateProject(projectId, (project) => ({
@@ -1034,6 +1056,7 @@ function App() {
       tasks: generateTasks(id, newLive.eventDate),
       tickets: defaultTickets(ticketLaunch, newLive.liveType),
       productionItems: defaultProductionItems(newLive.eventDate),
+      scheduleItems: defaultRunSchedule(id, newLive.eventDate, newLive.liveType, newLive.manager),
     };
 
     setProjects((current) => [live, ...current]);
@@ -1114,6 +1137,10 @@ function App() {
                   <CalendarDays size={18} />
                   <h2>ライブ一覧</h2>
                 </div>
+                <button className="miniScheduleButton" onClick={() => setIsScheduleOpen(true)} type="button">
+                  <CalendarDays size={15} />
+                  前日/当日
+                </button>
                 <button
                   className="miniAddButton"
                   onClick={() => {
@@ -1407,6 +1434,26 @@ function App() {
                   作成
                 </button>
               </form>
+              </aside>
+            )}
+
+            {isScheduleOpen && (
+              <aside className="scheduleOverlay">
+                <div className="drawerHeader">
+                  <div>
+                    <span>Run sheet</span>
+                    <h2>
+                      {formatDate(selectedLive.eventDate)} {selectedLive.title}
+                    </h2>
+                  </div>
+                  <button className="iconButton" onClick={() => setIsScheduleOpen(false)} type="button">
+                    <X size={20} />
+                  </button>
+                </div>
+                <RunScheduleManager
+                  project={selectedLive}
+                  onScheduleItemsChange={(scheduleItems) => updateScheduleItems(selectedLive.id, scheduleItems)}
+                />
               </aside>
             )}
           </section>
@@ -2405,6 +2452,186 @@ function ProductionEditor({
   );
 }
 
+function RunScheduleManager({
+  project,
+  onScheduleItemsChange,
+}: {
+  project: LiveProject;
+  onScheduleItemsChange: (scheduleItems: RunScheduleItem[]) => void;
+}) {
+  const scheduleItems = useMemo(
+    () =>
+      sortRunSchedule(
+        project.scheduleItems ?? defaultRunSchedule(project.id, project.eventDate, project.liveType, project.manager),
+      ),
+    [project.eventDate, project.id, project.liveType, project.manager, project.scheduleItems],
+  );
+  const [activeDay, setActiveDay] = useState<RunScheduleDay>("当日");
+  const [newItem, setNewItem] = useState({
+    time: "10:00",
+    title: "",
+    owner: project.manager,
+    place: "",
+    note: "",
+  });
+  const visibleItems = scheduleItems.filter((item) => item.day === activeDay);
+
+  useEffect(() => {
+    setNewItem((current) => ({
+      ...current,
+      owner: project.manager,
+    }));
+  }, [project.manager]);
+
+  const setSchedule = (items: RunScheduleItem[]) => onScheduleItemsChange(sortRunSchedule(items));
+  const updateItem = (itemId: string, updates: Partial<RunScheduleItem>) => {
+    setSchedule(scheduleItems.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+  };
+  const addItem = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const title = newItem.title.trim();
+    if (!title) return;
+    setSchedule([
+      ...scheduleItems,
+      {
+        id: `schedule-${crypto.randomUUID()}`,
+        day: activeDay,
+        time: newItem.time,
+        title,
+        owner: newItem.owner,
+        place: newItem.place.trim(),
+        note: newItem.note.trim(),
+      },
+    ]);
+    setNewItem((current) => ({ ...current, title: "", place: "", note: "" }));
+  };
+  const deleteItem = (itemId: string) => {
+    setSchedule(scheduleItems.filter((item) => item.id !== itemId));
+  };
+
+  return (
+    <CompactSection icon={<CalendarDays size={17} />} title="進行表">
+      <div className="runScheduleToolbar">
+        <div className="runScheduleTabs">
+          {(["前日", "当日"] as RunScheduleDay[]).map((day) => (
+            <button
+              className={activeDay === day ? "active" : ""}
+              key={day}
+              onClick={() => setActiveDay(day)}
+              type="button"
+            >
+              {day}
+            </button>
+          ))}
+        </div>
+        <div className="runScheduleActions">
+          <button
+            onClick={() => window.alert("Slack連携は今後の実装想定です。")}
+            type="button"
+          >
+            <Send size={14} />
+            Slackへ送信
+          </button>
+          <button onClick={() => printRunSchedule(project, scheduleItems)} type="button">
+            <Printer size={14} />
+            PDF
+          </button>
+        </div>
+      </div>
+
+      <div className="runScheduleRows">
+        {visibleItems.map((item) => (
+          <div className="runScheduleRow" key={item.id}>
+            <select
+              aria-label="時刻"
+              value={item.time}
+              onChange={(event) => updateItem(item.id, { time: event.target.value })}
+            >
+              {fiveMinuteTimes.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+            <input
+              aria-label="内容"
+              value={item.title}
+              onChange={(event) => updateItem(item.id, { title: event.target.value })}
+            />
+            <select
+              aria-label="担当"
+              value={item.owner}
+              onChange={(event) => updateItem(item.id, { owner: event.target.value })}
+            >
+              {managers.map((manager) => (
+                <option key={manager}>{manager}</option>
+              ))}
+            </select>
+            <input
+              aria-label="場所"
+              value={item.place}
+              onChange={(event) => updateItem(item.id, { place: event.target.value })}
+            />
+            <input
+              aria-label="メモ"
+              className="scheduleNoteInput"
+              placeholder="メモ"
+              value={item.note ?? ""}
+              onChange={(event) => updateItem(item.id, { note: event.target.value })}
+            />
+            <button aria-label="削除" className="scheduleDeleteButton" onClick={() => deleteItem(item.id)} type="button">
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+        {visibleItems.length === 0 && <div className="scheduleEmpty">予定はありません</div>}
+      </div>
+
+      <form className="runScheduleAdd" onSubmit={addItem}>
+        <select
+          aria-label="追加時刻"
+          value={newItem.time}
+          onChange={(event) => setNewItem({ ...newItem, time: event.target.value })}
+        >
+          {fiveMinuteTimes.map((time) => (
+            <option key={time} value={time}>
+              {time}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="追加内容"
+          placeholder={`${activeDay}の予定を追加`}
+          value={newItem.title}
+          onChange={(event) => setNewItem({ ...newItem, title: event.target.value })}
+        />
+        <select
+          aria-label="追加担当"
+          value={newItem.owner}
+          onChange={(event) => setNewItem({ ...newItem, owner: event.target.value })}
+        >
+          {managers.map((manager) => (
+            <option key={manager}>{manager}</option>
+          ))}
+        </select>
+        <input
+          aria-label="追加場所"
+          placeholder="場所"
+          value={newItem.place}
+          onChange={(event) => setNewItem({ ...newItem, place: event.target.value })}
+        />
+        <input
+          aria-label="追加メモ"
+          placeholder="メモ"
+          value={newItem.note}
+          onChange={(event) => setNewItem({ ...newItem, note: event.target.value })}
+        />
+        <button type="submit">追加</button>
+      </form>
+    </CompactSection>
+  );
+}
+
 function DatePickerField({
   label,
   value,
@@ -3037,6 +3264,205 @@ function eventTone(kind: string) {
   return "prep";
 }
 
+function defaultRunSchedule(
+  projectId: string,
+  eventDate: string,
+  liveType: LiveType,
+  manager: string,
+): RunScheduleItem[] {
+  const oneManOpening = liveType === "定期公演" ? "18:30" : "16:30";
+  const oneManStart = liveType === "定期公演" ? "19:00" : "17:00";
+  return [
+    {
+      id: `${projectId}-schedule-eve-goods`,
+      day: "前日",
+      time: "18:00",
+      title: "グッズ・特典物確認",
+      owner: "小林",
+      place: "事務所",
+      note: "数量と不足物を確認",
+    },
+    {
+      id: `${projectId}-schedule-eve-costume`,
+      day: "前日",
+      time: "19:00",
+      title: "衣装・撮影物確認",
+      owner: "佐藤",
+      place: "事務所",
+      note: "持ち出し物をまとめる",
+    },
+    {
+      id: `${projectId}-schedule-eve-share`,
+      day: "前日",
+      time: "20:00",
+      title: "集合時間・注意事項共有",
+      owner: manager,
+      place: "Slack",
+      note: "メンバーとスタッフへ共有",
+    },
+    {
+      id: `${projectId}-schedule-day-staff`,
+      day: "当日",
+      time: "10:00",
+      title: "スタッフ集合",
+      owner: manager,
+      place: "会場入口",
+      note: "受付・搬入導線を確認",
+    },
+    {
+      id: `${projectId}-schedule-day-load`,
+      day: "当日",
+      time: "10:30",
+      title: "搬入・受付準備",
+      owner: "外注",
+      place: "会場",
+      note: "物販と受付を設営",
+    },
+    {
+      id: `${projectId}-schedule-day-rehearsal`,
+      day: "当日",
+      time: "13:00",
+      title: "リハーサル",
+      owner: manager,
+      place: "ステージ",
+      note: "音源・立ち位置確認",
+    },
+    {
+      id: `${projectId}-schedule-day-merch`,
+      day: "当日",
+      time: "15:30",
+      title: "物販準備",
+      owner: "小林",
+      place: "物販卓",
+      note: "価格表と決済確認",
+    },
+    {
+      id: `${projectId}-schedule-day-open`,
+      day: "当日",
+      time: oneManOpening,
+      title: "開場",
+      owner: manager,
+      place: "入口",
+      note: "",
+    },
+    {
+      id: `${projectId}-schedule-day-start`,
+      day: "当日",
+      time: oneManStart,
+      title: "開演",
+      owner: manager,
+      place: "ステージ",
+      note: "",
+    },
+    {
+      id: `${projectId}-schedule-day-benefit`,
+      day: "当日",
+      time: "19:00",
+      title: "特典会",
+      owner: "佐藤",
+      place: "特典会エリア",
+      note: "列整理と撮影導線を確認",
+    },
+    {
+      id: `${projectId}-schedule-day-close`,
+      day: "当日",
+      time: "20:30",
+      title: "撤収",
+      owner: "外注",
+      place: "会場",
+      note: "忘れ物確認",
+    },
+  ];
+}
+
+function sortRunSchedule(items: RunScheduleItem[]) {
+  const dayRank: Record<RunScheduleDay, number> = { 前日: 0, 当日: 1 };
+  return [...items].sort((a, b) => dayRank[a.day] - dayRank[b.day] || a.time.localeCompare(b.time));
+}
+
+function printRunSchedule(project: LiveProject, scheduleItems: RunScheduleItem[]) {
+  const printWindow = window.open("", "_blank", "width=960,height=720");
+  if (!printWindow) return;
+  const sortedItems = sortRunSchedule(scheduleItems);
+  const html = `<!doctype html>
+    <html lang="ja">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(project.title)} 進行表</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { margin: 0; padding: 28px; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+          h1 { margin: 0; font-size: 24px; }
+          h2 { margin: 24px 0 8px; font-size: 17px; border-bottom: 2px solid #111827; padding-bottom: 6px; }
+          .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+          .meta div { border: 1px solid #d8e0ec; border-radius: 8px; padding: 8px; }
+          .meta span { display: block; color: #64748b; font-size: 11px; font-weight: 700; }
+          .meta strong { display: block; margin-top: 3px; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+          th { background: #f1f5f9; color: #334155; text-align: left; }
+          th, td { border: 1px solid #d8e0ec; padding: 8px; vertical-align: top; }
+          td.time { width: 68px; font-weight: 800; }
+          td.owner { width: 76px; }
+          td.place { width: 120px; }
+          @media print { body { padding: 18mm; } button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(project.title)} 進行表</h1>
+        <div class="meta">
+          <div><span>グループ</span><strong>${escapeHtml(project.group)}</strong></div>
+          <div><span>開催日</span><strong>${escapeHtml(formatFullDate(project.eventDate))}</strong></div>
+          <div><span>会場</span><strong>${escapeHtml(project.venue)}</strong></div>
+          <div><span>主担当</span><strong>${escapeHtml(project.manager)}</strong></div>
+        </div>
+        ${(["前日", "当日"] as RunScheduleDay[])
+          .map((day) => renderSchedulePrintSection(day, project.eventDate, sortedItems))
+          .join("")}
+        <script>window.addEventListener("load", () => setTimeout(() => window.print(), 200));</script>
+      </body>
+    </html>`;
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+function renderSchedulePrintSection(day: RunScheduleDay, eventDate: string, scheduleItems: RunScheduleItem[]) {
+  const date = day === "前日" ? addDays(toDate(eventDate), -1) : eventDate;
+  const rows = scheduleItems.filter((item) => item.day === day);
+  return `
+    <h2>${escapeHtml(day)} ${escapeHtml(formatFullDate(date))}</h2>
+    <table>
+      <thead>
+        <tr><th>時刻</th><th>内容</th><th>担当</th><th>場所</th><th>メモ</th></tr>
+      </thead>
+      <tbody>
+        ${
+          rows.length > 0
+            ? rows
+                .map(
+                  (item) => `<tr>
+                    <td class="time">${escapeHtml(item.time)}</td>
+                    <td>${escapeHtml(item.title)}</td>
+                    <td class="owner">${escapeHtml(item.owner)}</td>
+                    <td class="place">${escapeHtml(item.place)}</td>
+                    <td>${escapeHtml(item.note ?? "")}</td>
+                  </tr>`,
+                )
+                .join("")
+            : `<tr><td colspan="5">予定はありません</td></tr>`
+        }
+      </tbody>
+    </table>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function generateTasks(projectId: string, eventDate: string): Task[] {
   const date = toDate(eventDate);
   return taskTemplates.map((template, index) => ({
@@ -3309,6 +3735,11 @@ function toIsoDate(date: Date) {
 function formatDate(value: string) {
   const date = toDate(value);
   return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatFullDate(value: string) {
+  const date = toDate(value);
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 function formatDateTime(value: string) {

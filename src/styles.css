@@ -3546,3 +3546,365 @@ button {
   background: #0f766e;
   box-shadow: inset 0 0 0 3px #ffffff;
 }
+/* Run schedule */
+.runScheduleToolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.runScheduleTabs {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--soft);
+}
+
+.runScheduleTabs button,
+.runScheduleActions button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.runScheduleTabs button {
+  padding: 0 10px;
+}
+
+.runScheduleTabs button.active {
+  background: #ffffff;
+  color: #0f766e;
+  box-shadow: 0 1px 6px rgba(24, 35, 51, 0.08);
+}
+
+.runScheduleActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.runScheduleActions button {
+  padding: 0 9px;
+  border: 1px solid var(--line-soft);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.runScheduleRows {
+  display: grid;
+  gap: 6px;
+}
+
+.runScheduleRow {
+  display: grid;
+  grid-template-columns: 72px minmax(140px, 1.15fr) 78px minmax(120px, 0.8fr) minmax(120px, 0.9fr) 30px;
+  gap: 5px;
+  align-items: center;
+  padding: 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+.runScheduleRow input,
+.runScheduleRow select,
+.runScheduleAdd input,
+.runScheduleAdd select {
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.runScheduleRow input,
+.runScheduleAdd input {
+  padding: 0 8px;
+}
+
+.scheduleDeleteButton {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--sub);
+}
+
+.runScheduleAdd {
+  display: grid;
+  grid-template-columns: 72px minmax(140px, 1.15fr) 78px minmax(120px, 0.8fr) minmax(120px, 0.9fr) 54px;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.runScheduleAdd button {
+  min-height: 31px;
+  border: 0;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.scheduleEmpty {
+  display: grid;
+  min-height: 54px;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 1320px) {
+  .runScheduleRow {
+    grid-template-columns: 72px minmax(120px, 1fr) 78px 30px;
+  }
+
+  .runScheduleRow .scheduleNoteInput,
+  .runScheduleRow input[aria-label="場所"] {
+    grid-column: 2 / 4;
+  }
+}
+
+/* Run schedule fit within right column */
+.runScheduleToolbar {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.runScheduleToolbar .runScheduleTabs,
+.runScheduleActions {
+  justify-self: stretch;
+}
+
+.runScheduleTabs {
+  width: 100%;
+}
+
+.runScheduleTabs button {
+  flex: 1 1 0;
+}
+
+.runScheduleActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: stretch;
+}
+
+.runScheduleActions button {
+  width: 100%;
+}
+
+.runScheduleRow {
+  grid-template-columns: 72px minmax(0, 1fr) 78px 30px;
+  grid-template-areas:
+    "time title owner delete"
+    "place place note note";
+}
+
+.runScheduleRow select[aria-label="時刻"] {
+  grid-area: time;
+}
+
+.runScheduleRow input[aria-label="内容"] {
+  grid-area: title;
+}
+
+.runScheduleRow select[aria-label="担当"] {
+  grid-area: owner;
+}
+
+.runScheduleRow input[aria-label="場所"] {
+  grid-area: place;
+}
+
+.runScheduleRow .scheduleNoteInput {
+  grid-area: note;
+}
+
+.scheduleDeleteButton {
+  grid-area: delete;
+}
+
+.runScheduleAdd {
+  grid-template-columns: 72px minmax(0, 1fr) 78px minmax(0, 0.75fr) minmax(0, 0.85fr) 52px;
+}
+
+/* Large schedule overlay */
+.panelTitleAction {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.panelTitleAction > div {
+  flex: 1 1 auto;
+}
+
+.panelTitleAction .miniScheduleButton,
+.panelTitleAction .miniAddButton {
+  flex: 0 0 auto;
+}
+
+.miniScheduleButton {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #5eead4;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.scheduleOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(24, 35, 51, 0.18);
+  overflow: auto;
+}
+
+.scheduleOverlay .compactSection {
+  min-height: 0;
+  align-content: start;
+  gap: 14px;
+}
+
+.scheduleOverlay .compactTitle {
+  display: none;
+}
+
+.scheduleOverlay .runScheduleToolbar {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.scheduleOverlay .runScheduleTabs {
+  width: auto;
+}
+
+.scheduleOverlay .runScheduleTabs button {
+  flex: 0 0 auto;
+  min-width: 78px;
+}
+
+.scheduleOverlay .runScheduleActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.scheduleOverlay .runScheduleActions button {
+  width: auto;
+  min-width: 88px;
+}
+
+.scheduleOverlay .runScheduleRows {
+  position: relative;
+  align-content: start;
+  gap: 10px;
+  padding-left: 28px;
+}
+
+.scheduleOverlay .runScheduleRows::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 10px;
+  width: 2px;
+  border-radius: 999px;
+  background: #ded5c7;
+}
+
+.scheduleOverlay .runScheduleRow {
+  position: relative;
+  grid-template-columns: 84px minmax(220px, 1.25fr) 92px minmax(150px, 0.85fr) minmax(160px, 0.95fr) 34px;
+  grid-template-areas: "time title owner place note delete";
+  padding: 9px;
+  border-color: #d9e1ec;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+.scheduleOverlay .runScheduleRow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -23px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #d6cab9;
+  box-shadow: 0 0 0 5px #ffffff;
+  transform: translateY(-50%);
+}
+
+.scheduleOverlay .runScheduleRow select[aria-label="時刻"] {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  font-weight: 900;
+}
+
+.scheduleOverlay .runScheduleRow input[aria-label="内容"] {
+  font-weight: 900;
+}
+
+.scheduleOverlay .runScheduleAdd {
+  grid-template-columns: 84px minmax(220px, 1.25fr) 92px minmax(150px, 0.85fr) minmax(160px, 0.95fr) 64px;
+  gap: 8px;
+  margin-left: 28px;
+  padding-top: 4px;
+}
+
+.scheduleOverlay .scheduleEmpty {
+  min-height: 48px;
+  place-items: center start;
+  padding-left: 14px;
+}
+
+@media (max-width: 1280px) {
+  .panelTitleAction {
+    gap: 6px;
+  }
+
+  .miniScheduleButton,
+  .miniAddButton {
+    padding-inline: 8px;
+  }
+
+  .scheduleOverlay .runScheduleRow {
+    grid-template-columns: 80px minmax(180px, 1fr) 88px minmax(130px, 0.8fr) minmax(140px, 0.85fr) 34px;
+  }
+}
