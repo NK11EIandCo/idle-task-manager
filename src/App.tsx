@@ -10,16 +10,28 @@ import {
   Clock3,
   CopyPlus,
   PackageCheck,
+  Pencil,
   Plus,
   Printer,
   Search,
   Send,
   Sparkles,
   Ticket,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  DragEvent,
+  FormEvent,
+  ReactNode,
+  RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type LiveStatus = "計画" | "進行中" | "完了" | "キャンセル";
 type TaskStatus = "未着手" | "進行中" | "完了";
@@ -28,14 +40,24 @@ type Phase = "イベント" | "チケット" | "企画" | "制作物" | "衣装"
 type LiveType = "ワンマン" | "定期公演" | "生誕祭";
 type TaskView = "未着手" | "進行中" | "完了済み";
 type LiveListView = "未" | "完";
-type AppMode = "work" | "manager";
+type AppMode = "work" | "manager" | "cheki";
+type TaskRoleFilter = "全ロール" | "マネージャー" | "デザイナー" | "制作・外注" | "チケット" | "当日運営";
 type TicketStatus = "未作成" | "作成中" | "確認中" | "公開済";
 type ProductionStatus = "未依頼" | "依頼済" | "制作中" | "確認待ち" | "入稿済" | "納品済";
 type RunScheduleDay = "前日" | "当日";
-type ManagerFilter = "全て" | "遅延" | "今日" | "3日以内" | "外注" | "確認待ち";
-type ManagerIssueKind = "遅延" | "今日" | "3日以内" | "外注" | "確認待ち" | "未入力";
+type RunScheduleOwnerKind = "FOCスタッフ" | "チェキスタッフ" | "出演者" | "会場スタッフ" | "その他";
+type LegacyRunScheduleOwnerKind = "御社スタッフ" | "会場";
+type RunScheduleOwnerFilter = "全て" | RunScheduleOwnerKind;
+type ManagerFilter = "全て" | "遅延" | "今日" | "3日以内" | "外注" | "確認待ち" | "未依頼";
+type ManagerIssueKind = "遅延" | "今日" | "3日以内" | "外注" | "確認待ち" | "未入力" | "未依頼";
 type ManagerRisk = "high" | "warn" | "ok";
 type ManagerContact = { owner: string; count: number; reason: string; score: number };
+type GroupPage = {
+  name: string;
+  manager: string;
+  photo: string;
+  calendarUrl?: string;
+};
 
 type SubTask = {
   id: string;
@@ -55,6 +77,24 @@ type Task = {
   subtasks?: SubTask[];
 };
 
+type TaskTemplateItem = {
+  id: string;
+  phase: Phase;
+  title: string;
+  offset: number;
+  owner: string;
+  priority: Priority;
+  memo?: string;
+  subtasks: string[];
+};
+
+type TaskTemplateSet = {
+  id: string;
+  name: string;
+  liveType: LiveType | "共通";
+  items: TaskTemplateItem[];
+};
+
 type TicketPlan = {
   id: string;
   name: string;
@@ -69,10 +109,12 @@ type ProductionItem = {
   id: string;
   name: string;
   owner: string;
+  designer?: string;
   vendor: string;
   dueDate: string;
   status: ProductionStatus;
   fileUrl?: string;
+  memo?: string;
 };
 
 type RunScheduleItem = {
@@ -80,9 +122,19 @@ type RunScheduleItem = {
   day: RunScheduleDay;
   time: string;
   title: string;
+  ownerKind?: RunScheduleOwnerKind | LegacyRunScheduleOwnerKind;
   owner: string;
   place: string;
   note?: string;
+};
+
+type RunScheduleTemplateItem = Omit<RunScheduleItem, "id">;
+
+type RunScheduleTemplateSet = {
+  id: string;
+  name: string;
+  liveType: LiveType | "共通";
+  items: RunScheduleTemplateItem[];
 };
 
 type LiveProject = {
@@ -98,6 +150,7 @@ type LiveProject = {
   rehearsal: string;
   photoShoot: string;
   productionCompany: string;
+  driveFolderUrl?: string;
   tasks: Task[];
   tickets: TicketPlan[];
   productionItems: ProductionItem[];
@@ -113,6 +166,13 @@ type NewLiveForm = {
   liveType: LiveType;
 };
 
+type GroupForm = {
+  name: string;
+  manager: string;
+  photo: string;
+  calendarUrl: string;
+};
+
 type CalendarItem = {
   id: string;
   date: string;
@@ -120,9 +180,33 @@ type CalendarItem = {
   title: string;
   liveTitle: string;
   kind: string;
-  liveId: string;
+  liveId?: string;
   taskId?: string;
   taskStatus?: TaskStatus;
+  readonly?: boolean;
+  sourceUrl?: string;
+};
+
+type GeneratedCalendarPayload = {
+  calendars?: Array<{
+    group: string;
+    events?: Array<{
+      id: string;
+      date: string;
+      time: string;
+      title: string;
+      location?: string;
+      sourceUrl?: string;
+    }>;
+  }>;
+  holidays?: Array<{
+    id: string;
+    date: string;
+    time: string;
+    title: string;
+    location?: string;
+    sourceUrl?: string;
+  }>;
 };
 
 type DragTask = {
@@ -148,19 +232,61 @@ type ManagerIssue = {
   priority: number;
 };
 
-const groupPages = [
-  { name: "Elandia", manager: "田中", photo: "https://picsum.photos/seed/elandia/96/96" },
-  { name: "Nova Belles", manager: "佐藤", photo: "https://picsum.photos/seed/nova-belles/96/96" },
-  { name: "Lumiere", manager: "高橋", photo: "https://picsum.photos/seed/lumiere/96/96" },
-  { name: "Asteria", manager: "小林", photo: "https://picsum.photos/seed/asteria/96/96" },
-  { name: "Prism Note", manager: "佐藤", photo: "https://picsum.photos/seed/prism-note/96/96" },
-  { name: "Mirai Palette", manager: "高橋", photo: "https://picsum.photos/seed/mirai-palette/96/96" },
+type ChekiShift = {
+  id: string;
+  liveId: string;
+  group: string;
+  liveTitle: string;
+  venue: string;
+  date: string;
+  timeRange: string;
+  role: string;
+  requiredCount: number;
+  assignedCount: number;
+  status: "募集中" | "応募済み" | "確定";
+  cancelUntil: string;
+  meetingTime: string;
+  meetingPlace: string;
+  belongings: string;
+  memo: string;
+};
+type ChekiCalendarDateStatus = "available" | "full";
+
+const initialGroupPages: GroupPage[] = [
+  {
+    name: "Hey!Mommy!",
+    manager: "小杉",
+    photo: "https://picsum.photos/seed/heymommy/96/96",
+    calendarUrl:
+      "https://calendar.google.com/calendar/u/0/newembed?height=600&wkst=1&bgcolor=%23f772cf&ctz=Asia/Tokyo&title=Hey!Mommy!&src=aGV5bW9tbXkxMTExMUBnbWFpbC5jb20&src=amEuamFwYW5lc2UjaG9saWRheUBncm91cC52LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%23D81B60&color=%23F09300",
+  },
+  {
+    name: "SCRAMBLE SMILE",
+    manager: "御手洗",
+    photo: "https://picsum.photos/seed/scramble-smile/96/96",
+    calendarUrl: "https://calendar.google.com/calendar/u/0/newembed?src=info@scramblesmile.jp&ctz=Asia/Tokyo",
+  },
 ];
 
-const managers = ["田中", "佐藤", "高橋", "小林", "外注"];
+const managers = ["小杉", "御手洗", "鍋島"];
+const taskRoleFilters: TaskRoleFilter[] = [
+  "全ロール",
+  "マネージャー",
+  "デザイナー",
+  "制作・外注",
+  "チケット",
+  "当日運営",
+];
 const phaseOrder: Phase[] = ["イベント", "チケット", "企画", "制作物", "衣装", "当日"];
 const ticketStatuses: TicketStatus[] = ["未作成", "作成中", "確認中", "公開済"];
 const productionStatuses: ProductionStatus[] = ["未依頼", "依頼済", "制作中", "確認待ち", "入稿済", "納品済"];
+const runScheduleOwnerKinds: RunScheduleOwnerKind[] = [
+  "FOCスタッフ",
+  "チェキスタッフ",
+  "出演者",
+  "会場スタッフ",
+  "その他",
+];
 const fiveMinuteTimes = Array.from({ length: 24 * 12 }, (_, index) => {
   const hour = `${Math.floor(index / 12)}`.padStart(2, "0");
   const minute = `${(index % 12) * 5}`.padStart(2, "0");
@@ -176,54 +302,54 @@ const taskTemplates: Array<{
   priority: Priority;
   memo?: string;
 }> = [
-  { phase: "イベント", title: "イベント日決定", offset: -120, owner: "田中", priority: "必須" },
-  { phase: "イベント", title: "会場決定＆予約", offset: -110, owner: "田中", priority: "必須" },
-  { phase: "イベント", title: "ライブタイトル決定", offset: -75, owner: "佐藤", priority: "重要" },
+  { phase: "イベント", title: "イベント日決定", offset: -120, owner: "小杉", priority: "必須" },
+  { phase: "イベント", title: "会場決定＆予約", offset: -110, owner: "小杉", priority: "必須" },
+  { phase: "イベント", title: "ライブタイトル決定", offset: -75, owner: "御手洗", priority: "重要" },
   {
     phase: "チケット",
     title: "FC・一般スケジュール決定",
     offset: -65,
-    owner: "佐藤",
+    owner: "御手洗",
     priority: "必須",
   },
-  { phase: "チケット", title: "チケットページ作成", offset: -55, owner: "小林", priority: "必須" },
-  { phase: "企画", title: "タイムテーブル作成", offset: -45, owner: "高橋", priority: "重要" },
-  { phase: "企画", title: "楽曲制作", offset: -60, owner: "高橋", priority: "重要" },
-  { phase: "企画", title: "セトリ", offset: -25, owner: "高橋", priority: "重要" },
-  { phase: "企画", title: "ゲネプロスタジオ予約", offset: -35, owner: "田中", priority: "必須" },
-  { phase: "企画", title: "当日バイト手配", offset: -18, owner: "小林", priority: "重要" },
-  { phase: "企画", title: "当日カメラマン手配", offset: -28, owner: "小林", priority: "重要" },
+  { phase: "チケット", title: "チケットページ作成", offset: -55, owner: "小杉", priority: "必須" },
+  { phase: "企画", title: "タイムテーブル作成", offset: -45, owner: "鍋島", priority: "重要" },
+  { phase: "企画", title: "楽曲制作", offset: -60, owner: "鍋島", priority: "重要" },
+  { phase: "企画", title: "セトリ", offset: -25, owner: "鍋島", priority: "重要" },
+  { phase: "企画", title: "ゲネプロスタジオ予約", offset: -35, owner: "小杉", priority: "必須" },
+  { phase: "企画", title: "当日バイト手配", offset: -18, owner: "小杉", priority: "重要" },
+  { phase: "企画", title: "当日カメラマン手配", offset: -28, owner: "小杉", priority: "重要" },
   {
     phase: "制作物",
     title: "告知画像の依頼",
     offset: -50,
-    owner: "外注",
+    owner: "御手洗",
     priority: "重要",
     memo: "素材一式を共有",
   },
-  { phase: "制作物", title: "デザイナー制作発注", offset: -45, owner: "外注", priority: "重要" },
-  { phase: "制作物", title: "制作物リストの企画", offset: -40, owner: "佐藤", priority: "重要" },
-  { phase: "制作物", title: "グッズ入稿", offset: -21, owner: "外注", priority: "必須" },
+  { phase: "制作物", title: "デザイナー制作発注", offset: -45, owner: "御手洗", priority: "重要" },
+  { phase: "制作物", title: "制作物リストの企画", offset: -40, owner: "御手洗", priority: "重要" },
+  { phase: "制作物", title: "グッズ入稿", offset: -21, owner: "御手洗", priority: "必須" },
   {
     phase: "衣装",
     title: "衣装イメージ共有",
     offset: -55,
-    owner: "佐藤",
+    owner: "御手洗",
     priority: "重要",
     memo: "制作会社へ方向性共有",
   },
-  { phase: "衣装", title: "最終確認", offset: -16, owner: "佐藤", priority: "必須" },
-  { phase: "衣装", title: "衣装納品", offset: -10, owner: "外注", priority: "必須" },
-  { phase: "衣装", title: "アー写＆ブロマイド撮影", offset: -30, owner: "高橋", priority: "重要" },
-  { phase: "当日", title: "VIP用ピクチャチケットを準備", offset: -7, owner: "小林", priority: "通常" },
+  { phase: "衣装", title: "最終確認", offset: -16, owner: "御手洗", priority: "必須" },
+  { phase: "衣装", title: "衣装納品", offset: -10, owner: "御手洗", priority: "必須" },
+  { phase: "衣装", title: "アー写＆ブロマイド撮影", offset: -30, owner: "鍋島", priority: "重要" },
+  { phase: "当日", title: "VIP用ピクチャチケットを準備", offset: -7, owner: "小杉", priority: "通常" },
   {
     phase: "当日",
     title: "ビデオカメラのバッテリー充電＆確認",
     offset: -2,
-    owner: "小林",
+    owner: "小杉",
     priority: "通常",
   },
-  { phase: "当日", title: "最前列の紙用意", offset: -2, owner: "小林", priority: "通常" },
+  { phase: "当日", title: "最前列の紙用意", offset: -2, owner: "小杉", priority: "通常" },
 ];
 
 const subtaskTemplates: Record<string, string[]> = {
@@ -298,15 +424,70 @@ const subtaskTemplates: Record<string, string[]> = {
   ],
 };
 
+function createDefaultTaskTemplateSet(): TaskTemplateSet {
+  return {
+    id: "template-standard",
+    name: "標準ライブ",
+    liveType: "共通",
+    items: taskTemplates.map((template, index) => ({
+      id: `template-standard-item-${index}`,
+      phase: template.phase,
+      title: template.title,
+      offset: template.offset,
+      owner: template.owner,
+      priority: template.priority,
+      memo: template.memo,
+      subtasks: subtaskTemplates[template.title] ?? [],
+    })),
+  };
+}
+
+function cloneTaskTemplateSet(template: TaskTemplateSet): TaskTemplateSet {
+  return {
+    ...template,
+    items: template.items.map((item) => ({
+      ...item,
+      subtasks: [...item.subtasks],
+    })),
+  };
+}
+
+function createDefaultRunScheduleTemplateSet(): RunScheduleTemplateSet {
+  return {
+    id: "run-template-standard",
+    name: "標準進行表",
+    liveType: "共通",
+    items: defaultRunSchedule("run-template-standard", toIsoDate(today), "ワンマン", "小杉").map(
+      ({ id: _id, ...item }) => item,
+    ),
+  };
+}
+
+function cloneRunScheduleTemplateSet(template: RunScheduleTemplateSet): RunScheduleTemplateSet {
+  return {
+    ...template,
+    items: template.items.map((item) => ({ ...item })),
+  };
+}
+
+function buildRunScheduleFromTemplate(projectId: string, templateItems: RunScheduleTemplateItem[]): RunScheduleItem[] {
+  return sortRunSchedule(
+    templateItems.map((item, index) => ({
+      ...item,
+      id: `${projectId}-schedule-template-${index}-${crypto.randomUUID()}`,
+    })),
+  );
+}
+
 const initialProjects: LiveProject[] = [
   {
     id: "live-elandia-3rd",
-    group: "Elandia",
+    group: "Hey!Mommy!",
     title: "3rd Anniversary Live",
     venue: "Spotify O-WEST",
     eventDate: "2026-06-10",
     status: "進行中",
-    manager: "田中",
+    manager: "小杉",
     liveType: "ワンマン",
     ticketLaunch: "2026-05-20T20:00",
     rehearsal: "2026-06-08T14:00 @ 新宿リハーサルスタジオ",
@@ -352,37 +533,43 @@ const initialProjects: LiveProject[] = [
       {
         id: "item-elandia-keyvisual",
         name: "告知画像",
-        owner: "佐藤",
+        owner: "御手洗",
+        designer: "Design Nao",
         vendor: "Design Nao",
         dueDate: "2026-05-18",
         status: "納品済",
+        memo: "公開済みデータ確認済み",
       },
       {
         id: "item-elandia-bromide",
         name: "ブロマイド",
-        owner: "高橋",
+        owner: "鍋島",
+        designer: "Photo K",
         vendor: "Photo K",
         dueDate: "2026-06-04",
         status: "確認待ち",
+        memo: "最終確認待ち",
       },
       {
         id: "item-elandia-shirt",
         name: "記念Tシャツ",
-        owner: "外注",
+        owner: "御手洗",
+        designer: "PrintWorks",
         vendor: "PrintWorks",
         dueDate: "2026-06-03",
         status: "制作中",
+        memo: "サイズ展開確認中",
       },
     ],
   },
   {
     id: "live-elandia-regular",
-    group: "Elandia",
+    group: "Hey!Mommy!",
     title: "Monthly Stage vol.18",
     venue: "渋谷Club Asia",
     eventDate: "2026-06-28",
     status: "計画",
-    manager: "田中",
+    manager: "小杉",
     liveType: "定期公演",
     ticketLaunch: "2026-06-12T20:00",
     rehearsal: "2026-06-26T13:00 @ 渋谷サウンドスタジオ",
@@ -399,12 +586,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-nova-summer",
-    group: "Nova Belles",
+    group: "SCRAMBLE SMILE",
     title: "夏のワンマンライブ",
     venue: "Zepp Shinjuku",
     eventDate: "2026-07-20",
     status: "進行中",
-    manager: "佐藤",
+    manager: "御手洗",
     liveType: "ワンマン",
     ticketLaunch: "2026-06-15T21:00",
     rehearsal: "2026-07-17T12:00 @ 渋谷サウンドスタジオ",
@@ -439,29 +626,33 @@ const initialProjects: LiveProject[] = [
       {
         id: "item-nova-poster",
         name: "駅貼りポスター",
-        owner: "佐藤",
+        owner: "御手洗",
+        designer: "Design Nao",
         vendor: "Design Nao",
         dueDate: "2026-06-24",
         status: "依頼済",
+        memo: "",
       },
       {
         id: "item-nova-towel",
         name: "マフラータオル",
-        owner: "外注",
+        owner: "御手洗",
+        designer: "PrintWorks",
         vendor: "PrintWorks",
         dueDate: "2026-07-01",
         status: "未依頼",
+        memo: "",
       },
     ],
   },
   {
     id: "live-nova-birthday",
-    group: "Nova Belles",
+    group: "SCRAMBLE SMILE",
     title: "美緒 生誕祭",
     venue: "新宿BLAZE",
     eventDate: "2026-08-08",
     status: "計画",
-    manager: "佐藤",
+    manager: "御手洗",
     liveType: "生誕祭",
     ticketLaunch: "2026-07-10T21:00",
     rehearsal: "2026-08-06T15:00 @ 新宿リハーサルスタジオ",
@@ -475,12 +666,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-lumiere-regular",
-    group: "Lumiere",
+    group: "Hey!Mommy!",
     title: "定期公演 vol.12",
     venue: "新宿ReNY",
     eventDate: "2026-06-15",
     status: "計画",
-    manager: "高橋",
+    manager: "鍋島",
     liveType: "定期公演",
     ticketLaunch: "2026-06-05T20:00",
     rehearsal: "2026-06-13T13:00 @ 池袋リハーサルベース",
@@ -513,7 +704,7 @@ const initialProjects: LiveProject[] = [
       {
         id: "item-lumiere-sticker",
         name: "限定ステッカー",
-        owner: "小林",
+        owner: "小杉",
         vendor: "QuickPrint",
         dueDate: "2026-06-10",
         status: "未依頼",
@@ -522,12 +713,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-lumiere-summer",
-    group: "Lumiere",
+    group: "Hey!Mommy!",
     title: "夏のショーケース",
     venue: "白金高輪SELENE b2",
     eventDate: "2026-07-05",
     status: "進行中",
-    manager: "高橋",
+    manager: "鍋島",
     liveType: "ワンマン",
     ticketLaunch: "2026-06-09T20:00",
     rehearsal: "2026-07-03T13:00 @ 池袋リハーサルベース",
@@ -544,12 +735,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-asteria-debut",
-    group: "Asteria",
+    group: "SCRAMBLE SMILE",
     title: "デビューお披露目ライブ",
     venue: "代官山UNIT",
     eventDate: "2026-06-22",
     status: "進行中",
-    manager: "小林",
+    manager: "小杉",
     liveType: "ワンマン",
     ticketLaunch: "2026-06-07T20:00",
     rehearsal: "2026-06-20T13:00 @ 恵比寿スタジオ",
@@ -566,12 +757,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-asteria-vol2",
-    group: "Asteria",
+    group: "SCRAMBLE SMILE",
     title: "Star Trail vol.2",
     venue: "下北沢シャングリラ",
     eventDate: "2026-07-18",
     status: "計画",
-    manager: "小林",
+    manager: "小杉",
     liveType: "定期公演",
     ticketLaunch: "2026-07-01T20:00",
     rehearsal: "2026-07-16T14:00 @ 下北沢スタジオ",
@@ -586,12 +777,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-prism-note-release",
-    group: "Prism Note",
+    group: "Hey!Mommy!",
     title: "新曲リリースライブ",
     venue: "Veats Shibuya",
     eventDate: "2026-07-12",
     status: "進行中",
-    manager: "佐藤",
+    manager: "御手洗",
     liveType: "ワンマン",
     ticketLaunch: "2026-06-18T21:00",
     rehearsal: "2026-07-10T13:00 @ 渋谷サウンドスタジオ",
@@ -607,12 +798,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-prism-note-regular",
-    group: "Prism Note",
+    group: "Hey!Mommy!",
     title: "Prism Room vol.7",
     venue: "GARRET udagawa",
     eventDate: "2026-08-02",
     status: "計画",
-    manager: "佐藤",
+    manager: "御手洗",
     liveType: "定期公演",
     ticketLaunch: "2026-07-15T20:00",
     rehearsal: "2026-07-31T14:00 @ 渋谷リハーサル",
@@ -626,12 +817,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-mirai-palette-first",
-    group: "Mirai Palette",
+    group: "SCRAMBLE SMILE",
     title: "初単独ライブ",
     venue: "恵比寿LIQUIDROOM",
     eventDate: "2026-06-30",
     status: "進行中",
-    manager: "高橋",
+    manager: "鍋島",
     liveType: "ワンマン",
     ticketLaunch: "2026-06-11T21:00",
     rehearsal: "2026-06-28T13:00 @ 恵比寿スタジオ",
@@ -648,12 +839,12 @@ const initialProjects: LiveProject[] = [
   },
   {
     id: "live-mirai-palette-regular",
-    group: "Mirai Palette",
+    group: "SCRAMBLE SMILE",
     title: "Palette Lab vol.3",
     venue: "新宿MARZ",
     eventDate: "2026-07-26",
     status: "計画",
-    manager: "高橋",
+    manager: "鍋島",
     liveType: "定期公演",
     ticketLaunch: "2026-07-09T20:00",
     rehearsal: "2026-07-24T14:00 @ 新宿スタジオ",
@@ -667,35 +858,68 @@ const initialProjects: LiveProject[] = [
 
 function App() {
   const [projects, setProjects] = useState(initialProjects);
+  const [groups, setGroups] = useState<GroupPage[]>(initialGroupPages);
+  const [externalCalendarItems, setExternalCalendarItems] = useState<CalendarItem[]>([]);
   const [appMode, setAppMode] = useState<AppMode>("work");
   const [managerGroupFilter, setManagerGroupFilter] = useState("全グループ");
   const [selectedManagerLiveId, setSelectedManagerLiveId] = useState(initialProjects[0].id);
   const [managerContactFilter, setManagerContactFilter] = useState("全員");
+  const [managerRoleFilter, setManagerRoleFilter] = useState<TaskRoleFilter>("全ロール");
   const [selectedManagerIssueId, setSelectedManagerIssueId] = useState("");
-  const [activeGroup, setActiveGroup] = useState(groupPages[0].name);
+  const [activeGroup, setActiveGroup] = useState(initialGroupPages[0].name);
   const [selectedLiveId, setSelectedLiveId] = useState(initialProjects[0].id);
   const [taskView, setTaskView] = useState<TaskView>("未着手");
   const [liveListView, setLiveListView] = useState<LiveListView>("未");
   const [query, setQuery] = useState("");
+  const [taskTemplateSets, setTaskTemplateSets] = useState<TaskTemplateSet[]>(() => [
+    createDefaultTaskTemplateSet(),
+  ]);
+  const [selectedCreateTemplateId, setSelectedCreateTemplateId] = useState("template-standard");
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
+  const [templateDraft, setTemplateDraft] = useState<TaskTemplateSet>(() => createDefaultTaskTemplateSet());
+  const [runScheduleTemplateSets, setRunScheduleTemplateSets] = useState<RunScheduleTemplateSet[]>(() => [
+    createDefaultRunScheduleTemplateSet(),
+  ]);
+  const [selectedRunScheduleTemplateId, setSelectedRunScheduleTemplateId] = useState("run-template-standard");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
-  const [newTaskOwner, setNewTaskOwner] = useState(selectedLiveId ? "田中" : managers[0]);
+  const [newTaskOwner, setNewTaskOwner] = useState(selectedLiveId ? "小杉" : managers[0]);
+  const [taskRoleFilter, setTaskRoleFilter] = useState<TaskRoleFilter>("全ロール");
   const [taskOwnerFilter, setTaskOwnerFilter] = useState("全員");
   const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(null);
   const [taskScrollHint, setTaskScrollHint] = useState({ top: false, bottom: false });
   const [actionScrollHint, setActionScrollHint] = useState({ top: false, bottom: false });
+  const [liveListScrollHint, setLiveListScrollHint] = useState({ top: false, bottom: false });
   const taskListRef = useRef<HTMLDivElement | null>(null);
   const actionColumnRef = useRef<HTMLElement | null>(null);
+  const liveListRef = useRef<HTMLDivElement | null>(null);
+  const groupActionsRef = useRef<HTMLDivElement | null>(null);
+  const groupEditorRef = useRef<HTMLDivElement | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [isGroupEditorOpen, setIsGroupEditorOpen] = useState(false);
   const [newLive, setNewLive] = useState<NewLiveForm>({
-    group: groupPages[0].name,
+    group: initialGroupPages[0].name,
     title: "",
     venue: "",
     eventDate: "",
-    manager: groupPages[0].manager,
+    manager: initialGroupPages[0].manager,
     liveType: "ワンマン",
   });
+  const [editingGroupName, setEditingGroupName] = useState<string | null>(null);
+  const [groupForm, setGroupForm] = useState<GroupForm>({
+    name: "",
+    manager: initialGroupPages[0].manager,
+    photo: "",
+    calendarUrl: "",
+  });
+  const [groupNotice, setGroupNotice] = useState("");
+  const activeGroupProfile = groups.find((group) => group.name === activeGroup);
+  const selectedCreateTemplate =
+    taskTemplateSets.find((template) => template.id === selectedCreateTemplateId) ?? taskTemplateSets[0];
+  const selectedRunScheduleTemplate =
+    runScheduleTemplateSets.find((template) => template.id === selectedRunScheduleTemplateId) ??
+    runScheduleTemplateSets[0];
 
   const groupProjects = useMemo(
     () =>
@@ -705,7 +929,29 @@ function App() {
     [activeGroup, projects],
   );
 
-  const calendarItems = groupProjects
+  useEffect(() => {
+    const calendarUrl = activeGroupProfile?.calendarUrl;
+    if (!calendarUrl) {
+      setExternalCalendarItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    loadGoogleCalendarItems(calendarUrl, activeGroup)
+      .then((items) => {
+        if (!cancelled) setExternalCalendarItems(items);
+      })
+      .catch(() => {
+        if (!cancelled) setExternalCalendarItems([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGroup, activeGroupProfile?.calendarUrl]);
+
+  const calendarItems = [
+    ...groupProjects
     .flatMap((project) => {
       const milestoneItems = [
         {
@@ -761,37 +1007,60 @@ function App() {
         }));
 
       return [...milestoneItems, ...taskItems];
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }),
+    ...externalCalendarItems,
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const liveListProjects = groupProjects.filter((project) =>
     liveListView === "完" ? project.status === "完了" : project.status !== "完了",
   );
+  const calendarLiveItems = externalCalendarItems
+    .filter((item) => item.kind === "カレンダー")
+    .filter((item) => (liveListView === "完" ? toDate(item.date) < today : toDate(item.date) >= today))
+    .sort((a, b) => `${a.date}${a.time}${a.title}`.localeCompare(`${b.date}${b.time}${b.title}`));
   const liveListCounts: Record<LiveListView, number> = {
-    未: groupProjects.filter((project) => project.status !== "完了").length,
-    完: groupProjects.filter((project) => project.status === "完了").length,
+    未:
+      groupProjects.filter((project) => project.status !== "完了").length +
+      externalCalendarItems.filter((item) => item.kind === "カレンダー" && toDate(item.date) >= today).length,
+    完:
+      groupProjects.filter((project) => project.status === "完了").length +
+      externalCalendarItems.filter((item) => item.kind === "カレンダー" && toDate(item.date) < today).length,
   };
   const selectedLive =
-    groupProjects.find((project) => project.id === selectedLiveId) ?? groupProjects[0] ?? projects[0];
+    groupProjects.find((project) => project.id === selectedLiveId) ?? groupProjects[0] ?? null;
 
   const searchedProjects = liveListProjects.filter((project) => {
     const text = query.trim().toLowerCase();
     if (!text) return true;
     return `${project.title} ${project.venue}`.toLowerCase().includes(text);
   });
+  const searchedCalendarLiveItems = calendarLiveItems.filter((item) => {
+    const text = query.trim().toLowerCase();
+    if (!text) return true;
+    return `${item.title} ${item.liveTitle}`.toLowerCase().includes(text);
+  });
 
   const groupTasks = groupProjects.flatMap((project) => project.tasks);
-  const liveTasks = selectedLive.tasks.map((task) => ({
-    ...task,
-    liveId: selectedLive.id,
-    liveTitle: selectedLive.title,
-    eventDate: selectedLive.eventDate,
-  }));
+  const liveTasks = selectedLive
+    ? selectedLive.tasks.map((task) => ({
+      ...task,
+      liveId: selectedLive.id,
+      liveTitle: selectedLive.title,
+      eventDate: selectedLive.eventDate,
+    }))
+    : [];
   const ownerFilteredTasks =
     taskOwnerFilter === "全員" ? liveTasks : liveTasks.filter((task) => task.owner === taskOwnerFilter);
+  const roleAndOwnerFilteredTasks =
+    taskRoleFilter === "全ロール"
+      ? ownerFilteredTasks
+      : ownerFilteredTasks.filter((task) => getTaskRole(task) === taskRoleFilter);
   const ownerFilterOptions = ["全員", ...managers.filter((manager) => liveTasks.some((task) => task.owner === manager))];
+  const roleFilterOptions = taskRoleFilters.filter((role) =>
+    role === "全ロール" ? true : ownerFilteredTasks.some((task) => getTaskRole(task) === role),
+  );
 
-  const visibleTasks = ownerFilteredTasks
+  const visibleTasks = roleAndOwnerFilteredTasks
     .filter((task) => matchesTaskView(task, taskView))
     .sort((a, b) => {
       const lateSort = Number(isLate(b)) - Number(isLate(a));
@@ -802,9 +1071,9 @@ function App() {
     });
 
   const taskCounts: Record<TaskView, number> = {
-    未着手: ownerFilteredTasks.filter((task) => matchesTaskView(task, "未着手")).length,
-    進行中: ownerFilteredTasks.filter((task) => matchesTaskView(task, "進行中")).length,
-    完了済み: ownerFilteredTasks.filter((task) => matchesTaskView(task, "完了済み")).length,
+    未着手: roleAndOwnerFilteredTasks.filter((task) => matchesTaskView(task, "未着手")).length,
+    進行中: roleAndOwnerFilteredTasks.filter((task) => matchesTaskView(task, "進行中")).length,
+    完了済み: roleAndOwnerFilteredTasks.filter((task) => matchesTaskView(task, "完了済み")).length,
   };
 
   function openManagerIssue(issue: ManagerIssue) {
@@ -816,6 +1085,7 @@ function App() {
     setActiveGroup(issue.group);
     setSelectedLiveId(issue.liveId);
     setLiveListView(project?.status === "完了" ? "完" : "未");
+    setTaskRoleFilter("全ロール");
     setTaskOwnerFilter("全員");
     setQuery("");
 
@@ -855,21 +1125,43 @@ function App() {
     );
   }
 
+  function updateLiveListScrollHint() {
+    const element = liveListRef.current;
+    if (!element) return;
+    const top = element.scrollTop > 4;
+    const bottom = element.scrollTop + element.clientHeight < element.scrollHeight - 4;
+    setLiveListScrollHint((current) =>
+      current.top === top && current.bottom === bottom ? current : { top, bottom },
+    );
+  }
+
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       updateTaskScrollHint();
       updateActionScrollHint();
+      updateLiveListScrollHint();
     });
     const updateScrollHints = () => {
       updateTaskScrollHint();
       updateActionScrollHint();
+      updateLiveListScrollHint();
     };
     window.addEventListener("resize", updateScrollHints);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", updateScrollHints);
     };
-  }, [selectedLiveId, taskView, taskOwnerFilter, visibleTasks.length]);
+  }, [
+    selectedLiveId,
+    taskRoleFilter,
+    taskView,
+    taskOwnerFilter,
+    visibleTasks.length,
+    searchedProjects.length,
+    searchedCalendarLiveItems.length,
+    liveListView,
+    query,
+  ]);
 
   useEffect(() => {
     if (liveListProjects.length === 0) return;
@@ -880,6 +1172,21 @@ function App() {
     }
   }, [liveListProjects, selectedLiveId]);
 
+  useEffect(() => {
+    if (!isGroupEditorOpen) return;
+
+    const closeGroupEditor = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (groupActionsRef.current?.contains(target) || groupEditorRef.current?.contains(target)) {
+        return;
+      }
+      setIsGroupEditorOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeGroupEditor);
+    return () => document.removeEventListener("pointerdown", closeGroupEditor);
+  }, [isGroupEditorOpen]);
+
   function selectGroup(groupName: string) {
     const nextProject = projects
       .filter((project) => project.group === groupName && project.status !== "完了")
@@ -887,12 +1194,13 @@ function App() {
     const fallbackProject = projects
       .filter((project) => project.group === groupName)
       .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())[0];
-    const nextProfile = groupPages.find((group) => group.name === groupName) ?? groupPages[0];
+    const nextProfile = groups.find((group) => group.name === groupName) ?? groups[0];
 
     setActiveGroup(groupName);
     setLiveListView("未");
-    if (nextProject ?? fallbackProject) setSelectedLiveId((nextProject ?? fallbackProject).id);
+    setSelectedLiveId((nextProject ?? fallbackProject)?.id ?? "");
     setTaskView("未着手");
+    setTaskRoleFilter("全ロール");
     setTaskOwnerFilter("全員");
     setQuery("");
     setNewLive((form) => ({
@@ -900,6 +1208,124 @@ function App() {
       group: groupName,
       manager: nextProfile.manager,
     }));
+  }
+
+  function resetGroupForm() {
+    setEditingGroupName(null);
+    setGroupForm({
+      name: "",
+      manager: managers[0],
+      photo: "",
+      calendarUrl: "",
+    });
+    setGroupNotice("");
+  }
+
+  function openNewGroupForm() {
+    resetGroupForm();
+    setIsGroupEditorOpen(true);
+  }
+
+  function editActiveGroup() {
+    const group = groups.find((currentGroup) => currentGroup.name === activeGroup);
+    if (!group) return;
+    setEditingGroupName(group.name);
+    setGroupForm({
+      name: group.name,
+      manager: group.manager,
+      photo: group.photo,
+      calendarUrl: group.calendarUrl ?? "",
+    });
+    setGroupNotice("");
+    setIsGroupEditorOpen(true);
+  }
+
+  function saveGroup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = groupForm.name.trim();
+    const manager = groupForm.manager.trim() || managers[0];
+    const photo =
+      groupForm.photo.trim() || `https://picsum.photos/seed/${encodeURIComponent(name)}/96/96`;
+    const calendarUrl = groupForm.calendarUrl.trim();
+    if (!name) {
+      setGroupNotice("グループ名を入力してください。");
+      return;
+    }
+    const duplicate = groups.some(
+      (group) => group.name === name && group.name !== editingGroupName,
+    );
+    if (duplicate) {
+      setGroupNotice("同じ名前のグループが既にあります。");
+      return;
+    }
+
+    if (editingGroupName) {
+      setGroups((current) =>
+        current.map((group) =>
+          group.name === editingGroupName
+            ? { name, manager, photo, calendarUrl: calendarUrl || undefined }
+            : group,
+        ),
+      );
+      if (editingGroupName !== name) {
+        setProjects((current) =>
+          current.map((project) =>
+            project.group === editingGroupName ? { ...project, group: name } : project,
+          ),
+        );
+        if (activeGroup === editingGroupName) setActiveGroup(name);
+        if (managerGroupFilter === editingGroupName) setManagerGroupFilter(name);
+      }
+      setNewLive((form) =>
+        form.group === editingGroupName || activeGroup === name
+          ? { ...form, group: name, manager }
+          : form,
+      );
+      setGroupNotice("グループ情報を更新しました。");
+      setEditingGroupName(name);
+      setIsGroupEditorOpen(false);
+      return;
+    }
+
+    const nextGroup = { name, manager, photo, calendarUrl: calendarUrl || undefined };
+    setGroups((current) => [...current, nextGroup]);
+    setActiveGroup(name);
+    setSelectedLiveId("");
+    setLiveListView("未");
+    setTaskView("未着手");
+    setTaskRoleFilter("全ロール");
+    setTaskOwnerFilter("全員");
+    setQuery("");
+    setNewLive((form) => ({ ...form, group: name, manager }));
+    setEditingGroupName(name);
+    setGroupNotice("グループを追加しました。続けてライブを追加できます。");
+    setIsGroupEditorOpen(false);
+  }
+
+  function deleteActiveGroup() {
+    const liveCount = projects.filter((project) => project.group === activeGroup).length;
+    if (liveCount > 0) {
+      setGroupNotice("ライブが登録されているグループは削除できません。");
+      return;
+    }
+    if (groups.length <= 1) {
+      setGroupNotice("最後のグループは削除できません。");
+      return;
+    }
+    const nextGroups = groups.filter((group) => group.name !== activeGroup);
+    const nextGroup = nextGroups[0];
+    setGroups(nextGroups);
+    setActiveGroup(nextGroup.name);
+    setSelectedLiveId(
+      projects
+        .filter((project) => project.group === nextGroup.name && project.status !== "完了")
+        .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())[0]?.id ??
+        "",
+    );
+    setManagerGroupFilter((current) => (current === activeGroup ? "全グループ" : current));
+    setNewLive((form) => ({ ...form, group: nextGroup.name, manager: nextGroup.manager }));
+    resetGroupForm();
+    setIsGroupEditorOpen(false);
   }
 
   function updateProject(projectId: string, updater: (project: LiveProject) => LiveProject) {
@@ -980,6 +1406,32 @@ function App() {
     }));
   }
 
+  function addTicket(projectId: string) {
+    const id = `ticket-${crypto.randomUUID()}`;
+    updateProject(projectId, (project) => ({
+      ...project,
+      tickets: [
+        ...project.tickets,
+        {
+          id,
+          name: "新規券種",
+          price: 0,
+          saleStart: `${toIsoDate(today)}T20:00`,
+          benefit: "",
+          status: "未作成",
+        },
+      ],
+    }));
+    return id;
+  }
+
+  function deleteTicket(projectId: string, ticketId: string) {
+    updateProject(projectId, (project) => ({
+      ...project,
+      tickets: project.tickets.filter((ticket) => ticket.id !== ticketId),
+    }));
+  }
+
   function updateProductionItem(projectId: string, itemId: string, updates: Partial<ProductionItem>) {
     updateProject(projectId, (project) => ({
       ...project,
@@ -989,10 +1441,54 @@ function App() {
     }));
   }
 
+  function addProductionItem(projectId: string) {
+    const id = `item-${crypto.randomUUID()}`;
+    updateProject(projectId, (project) => ({
+      ...project,
+      productionItems: [
+        ...project.productionItems,
+        {
+          id,
+          name: "新規制作物",
+          owner: project.manager,
+          designer: "",
+          vendor: "未設定",
+          dueDate: addDays(toDate(project.eventDate), -14),
+          status: "未依頼",
+          memo: "",
+        },
+      ],
+    }));
+    return id;
+  }
+
+  function deleteProductionItem(projectId: string, itemId: string) {
+    updateProject(projectId, (project) => ({
+      ...project,
+      productionItems: project.productionItems.filter((item) => item.id !== itemId),
+    }));
+  }
+
   function updateScheduleItems(projectId: string, scheduleItems: RunScheduleItem[]) {
     updateProject(projectId, (project) => ({
       ...project,
       scheduleItems,
+    }));
+  }
+
+  function saveRunScheduleTemplate(template: RunScheduleTemplateSet) {
+    setRunScheduleTemplateSets((current) => {
+      const exists = current.some((item) => item.id === template.id);
+      if (exists) return current.map((item) => (item.id === template.id ? template : item));
+      return [...current, template];
+    });
+    setSelectedRunScheduleTemplateId(template.id);
+  }
+
+  function updateLiveDriveFolderUrl(projectId: string, driveFolderUrl: string) {
+    updateProject(projectId, (project) => ({
+      ...project,
+      driveFolderUrl,
     }));
   }
 
@@ -1005,6 +1501,7 @@ function App() {
     setSelectedLiveId(projectId);
     setSelectedTaskKey(`${projectId}-${taskId}`);
     if (targetTask) setTaskView(taskViewFromStatus(targetTask.status));
+    setTaskRoleFilter("全ロール");
     setTaskOwnerFilter("全員");
     setNewTaskDueDate(dueDate);
   }
@@ -1034,12 +1531,101 @@ function App() {
     setTaskView("未着手");
   }
 
+  function openTemplateEditor() {
+    const template = selectedCreateTemplate ?? createDefaultTaskTemplateSet();
+    setTemplateDraft(cloneTaskTemplateSet(template));
+    setIsDrawerOpen(false);
+    setIsTemplateEditorOpen(true);
+  }
+
+  function startNewTemplateDraft() {
+    setTemplateDraft({
+      id: `template-${crypto.randomUUID()}`,
+      name: "",
+      liveType: "共通",
+      items: [
+        {
+          id: `template-item-${crypto.randomUUID()}`,
+          phase: "イベント",
+          title: "",
+          offset: -30,
+          owner: selectedLive?.manager ?? activeGroupProfile?.manager ?? managers[0],
+          priority: "通常",
+          subtasks: [],
+        },
+      ],
+    });
+  }
+
+  function updateTemplateDraftItem(itemId: string, updates: Partial<TaskTemplateItem>) {
+    setTemplateDraft((current) => ({
+      ...current,
+      items: current.items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)),
+    }));
+  }
+
+  function addTemplateDraftItem() {
+    setTemplateDraft((current) => ({
+      ...current,
+      items: [
+        ...current.items,
+        {
+          id: `template-item-${crypto.randomUUID()}`,
+          phase: "イベント",
+          title: "",
+          offset: -30,
+          owner: selectedLive?.manager ?? activeGroupProfile?.manager ?? managers[0],
+          priority: "通常",
+          subtasks: [],
+        },
+      ],
+    }));
+  }
+
+  function deleteTemplateDraftItem(itemId: string) {
+    setTemplateDraft((current) => ({
+      ...current,
+      items: current.items.length <= 1 ? current.items : current.items.filter((item) => item.id !== itemId),
+    }));
+  }
+
+  function saveTaskTemplate() {
+    const name = templateDraft.name.trim();
+    const items = templateDraft.items
+      .map((item) => ({
+        ...item,
+        title: item.title.trim(),
+        memo: item.memo?.trim() || undefined,
+        subtasks: item.subtasks.map((subtask) => subtask.trim()).filter(Boolean),
+      }))
+      .filter((item) => item.title);
+
+    if (!name || items.length === 0) return;
+
+    const savedTemplate: TaskTemplateSet = {
+      ...templateDraft,
+      name,
+      items,
+    };
+
+    setTaskTemplateSets((current) => {
+      const exists = current.some((template) => template.id === savedTemplate.id);
+      if (exists) {
+        return current.map((template) => (template.id === savedTemplate.id ? savedTemplate : template));
+      }
+      return [...current, savedTemplate];
+    });
+    setSelectedCreateTemplateId(savedTemplate.id);
+    setIsTemplateEditorOpen(false);
+  }
+
   function createLive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!newLive.title.trim() || !newLive.venue.trim() || !newLive.eventDate) return;
 
     const id = `live-${crypto.randomUUID()}`;
     const ticketLaunch = `${addDays(toDate(newLive.eventDate), -35)}T20:00`;
+    const tasks = generateTasks(id, newLive.eventDate, selectedCreateTemplate?.items);
     const live: LiveProject = {
       id,
       group: activeGroup,
@@ -1053,10 +1639,12 @@ function App() {
       rehearsal: `${addDays(toDate(newLive.eventDate), -2)}T13:00 @ 未定`,
       photoShoot: `${addDays(toDate(newLive.eventDate), -28)}T11:00 @ 未定`,
       productionCompany: "未設定",
-      tasks: generateTasks(id, newLive.eventDate),
+      tasks,
       tickets: defaultTickets(ticketLaunch, newLive.liveType),
       productionItems: defaultProductionItems(newLive.eventDate),
-      scheduleItems: defaultRunSchedule(id, newLive.eventDate, newLive.liveType, newLive.manager),
+      scheduleItems: selectedRunScheduleTemplate
+        ? buildRunScheduleFromTemplate(id, selectedRunScheduleTemplate.items)
+        : defaultRunSchedule(id, newLive.eventDate, newLive.liveType, newLive.manager),
     };
 
     setProjects((current) => [live, ...current]);
@@ -1074,15 +1662,6 @@ function App() {
   return (
     <div className="app">
       <header className="topBar">
-        <div className="brand">
-          <div className="brandMark">
-            <Sparkles size={21} />
-          </div>
-          <div>
-            <span>Live task manager</span>
-            <h1>グループ別ライブ管理</h1>
-          </div>
-        </div>
         <div className="modeSwitch" aria-label="表示切り替え">
           <button
             className={appMode === "work" ? "active" : ""}
@@ -1101,50 +1680,110 @@ function App() {
           >
             管理
           </button>
+          <button
+            className={appMode === "cheki" ? "active" : ""}
+            onClick={() => {
+              setIsDrawerOpen(false);
+              setAppMode("cheki");
+            }}
+            type="button"
+          >
+            チェキスタッフ
+          </button>
         </div>
       </header>
 
-      <main className={appMode === "manager" ? "managerPage" : "groupPage"}>
+      <main className={appMode === "work" ? "groupPage" : "managerPage"}>
         {appMode === "manager" ? (
           <ManagerView
+            groups={groups}
             managerContactFilter={managerContactFilter}
             managerGroupFilter={managerGroupFilter}
+            managerRoleFilter={managerRoleFilter}
             projects={projects}
             selectedManagerIssueId={selectedManagerIssueId}
             selectedManagerLiveId={selectedManagerLiveId}
             setManagerContactFilter={setManagerContactFilter}
             setManagerGroupFilter={setManagerGroupFilter}
+            setManagerRoleFilter={setManagerRoleFilter}
             setSelectedManagerIssueId={setSelectedManagerIssueId}
             setSelectedManagerLiveId={setSelectedManagerLiveId}
             onOpenIssue={openManagerIssue}
           />
+        ) : appMode === "cheki" ? (
+          <ChekiStaffView groups={groups} projects={projects} />
         ) : (
         <section className="workGrid">
           <aside className="liveRail">
             <section className="sidePanel">
-              <PanelTitle icon={<Sparkles size={18} />} title="グループ" />
+              <div className="panelTitle groupPanelTitle">
+                <div>
+                  <h2>グループ</h2>
+                </div>
+                <div className="groupHeaderActions" ref={groupActionsRef}>
+                  <button onClick={openNewGroupForm} type="button">
+                    <Plus size={14} />
+                    新規
+                  </button>
+                  <button
+                    disabled={!groups.some((group) => group.name === activeGroup)}
+                    onClick={editActiveGroup}
+                    type="button"
+                  >
+                    <Pencil size={14} />
+                    編集
+                  </button>
+                  <button
+                    className="danger"
+                    disabled={
+                      !groups.some((group) => group.name === activeGroup) ||
+                      projects.some((project) => project.group === activeGroup) ||
+                      groups.length <= 1
+                    }
+                    onClick={deleteActiveGroup}
+                    type="button"
+                  >
+                    <Trash2 size={14} />
+                    削除
+                  </button>
+                </div>
+              </div>
               <GroupList
                 activeGroup={activeGroup}
-                groups={groupPages}
+                groups={groups}
                 projects={projects}
                 onSelect={selectGroup}
               />
+              {isGroupEditorOpen && (
+                <GroupEditor
+                  editingGroupName={editingGroupName}
+                  editorRef={groupEditorRef}
+                  form={groupForm}
+                  notice={groupNotice}
+                  onChange={setGroupForm}
+                  onSubmit={saveGroup}
+                />
+              )}
             </section>
 
             <section className="sidePanel">
               <div className="panelTitle panelTitleAction">
                 <div>
-                  <CalendarDays size={18} />
                   <h2>ライブ一覧</h2>
                 </div>
-                <button className="miniScheduleButton" onClick={() => setIsScheduleOpen(true)} type="button">
+                <button
+                  className="miniScheduleButton"
+                  disabled={!selectedLive}
+                  onClick={() => setIsScheduleOpen(true)}
+                  type="button"
+                >
                   <CalendarDays size={15} />
                   前日/当日
                 </button>
                 <button
                   className="miniAddButton"
                   onClick={() => {
-                    const profile = groupPages.find((group) => group.name === activeGroup);
+                    const profile = groups.find((group) => group.name === activeGroup);
                     setNewLive((form) => ({
                       ...form,
                       group: activeGroup,
@@ -1179,20 +1818,36 @@ function App() {
                   </button>
                 ))}
               </div>
-              <div className="liveList">
-                {searchedProjects.map((project) => (
-                  <LiveCard
-                    key={project.id}
-                    project={project}
-                    selected={project.id === selectedLive.id}
-                    onSelect={() => {
-                      setSelectedLiveId(project.id);
-                      setTaskOwnerFilter("全員");
-                    }}
-                  />
-                ))}
-                {searchedProjects.length === 0 && (
-                  <div className="miniEmpty">表示するライブはありません</div>
+              <div className="liveListWrap">
+                {liveListScrollHint.top && (
+                  <div className="groupScrollHint groupScrollHintTop">
+                    <ChevronUp size={14} />
+                  </div>
+                )}
+                <div className="liveList" onScroll={updateLiveListScrollHint} ref={liveListRef}>
+                  {searchedProjects.map((project) => (
+                    <LiveCard
+                      key={project.id}
+                      project={project}
+                      selected={project.id === selectedLive?.id}
+                      onSelect={() => {
+                        setSelectedLiveId(project.id);
+                        setTaskRoleFilter("全ロール");
+                        setTaskOwnerFilter("全員");
+                      }}
+                    />
+                  ))}
+                  {searchedCalendarLiveItems.map((item) => (
+                    <ExternalLiveCard item={item} key={item.id} />
+                  ))}
+                  {searchedProjects.length === 0 && searchedCalendarLiveItems.length === 0 && (
+                    <div className="miniEmpty">表示するライブはありません</div>
+                  )}
+                </div>
+                {liveListScrollHint.bottom && (
+                  <div className="groupScrollHint groupScrollHintBottom">
+                    <ChevronDown size={14} />
+                  </div>
                 )}
               </div>
             </section>
@@ -1202,7 +1857,7 @@ function App() {
             <section className="sidePanel">
               <CalendarPanel
                 items={calendarItems}
-                anchorDate={selectedLive.eventDate}
+                anchorDate={selectedLive?.eventDate || newLive.eventDate || toIsoDate(today)}
                 selectedMarkerDate={isDrawerOpen ? newLive.eventDate : newTaskDueDate}
                 selectedMarkerLabel={isDrawerOpen ? "開催" : "締切"}
                 onSelectDate={(date) => {
@@ -1216,7 +1871,9 @@ function App() {
                   moveTaskDueDate(liveId, taskId, date);
                 }}
                 onSelectItem={(item) => {
+                  if (item.readonly || !item.liveId) return;
                   setSelectedLiveId(item.liveId);
+                  setTaskRoleFilter("全ロール");
                   setTaskOwnerFilter("全員");
                   if (!item.taskId) {
                     setSelectedTaskKey(null);
@@ -1240,23 +1897,41 @@ function App() {
           <section className="contentArea">
             <div className="taskPane">
               <section className="mainPanel taskColumn">
-                <div className="panelHead">
+                <div className="panelHead taskPanelHead">
                   <div>
                     <h2>タスク</h2>
                   </div>
-                  <div className="taskControls">
-                    <label className="ownerSelect">
-                      <select
-                        aria-label="担当者フィルター"
-                        value={taskOwnerFilter}
-                        onChange={(event) => setTaskOwnerFilter(event.target.value)}
-                      >
-                        {ownerFilterOptions.map((owner) => (
-                          <option key={owner}>{owner}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} />
-                    </label>
+                  <div className="taskHeaderStack">
+                    <div className="taskControls">
+                      <button className="templateButton" onClick={openTemplateEditor} type="button">
+                        <CopyPlus size={14} />
+                        テンプレート
+                      </button>
+                      <label className="ownerSelect roleSelect">
+                        <select
+                          aria-label="ロールフィルター"
+                          value={taskRoleFilter}
+                          onChange={(event) => setTaskRoleFilter(event.target.value as TaskRoleFilter)}
+                        >
+                          {roleFilterOptions.map((role) => (
+                            <option key={role}>{role}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} />
+                      </label>
+                      <label className="ownerSelect">
+                        <select
+                          aria-label="担当者フィルター"
+                          value={taskOwnerFilter}
+                          onChange={(event) => setTaskOwnerFilter(event.target.value)}
+                        >
+                          {ownerFilterOptions.map((owner) => (
+                            <option key={owner}>{owner}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} />
+                      </label>
+                    </div>
                     <div className="taskViews">
                       {(["未着手", "進行中", "完了済み"] as TaskView[]).map((view) => (
                         <button
@@ -1338,14 +2013,28 @@ function App() {
             <div className="actionPane">
               <aside className="actionColumn" onScroll={updateActionScrollHint} ref={actionColumnRef}>
                 <section className="sidePanel">
-                  <LiveSummary
-                    project={selectedLive}
-                    onLiveStatusChange={(status) => setLiveStatus(selectedLive.id, status)}
-                    onTicketChange={(ticketId, updates) => updateTicket(selectedLive.id, ticketId, updates)}
-                    onProductionItemChange={(itemId, updates) =>
-                      updateProductionItem(selectedLive.id, itemId, updates)
-                    }
-                  />
+                  {selectedLive ? (
+                    <LiveSummary
+                      project={selectedLive}
+                      onAddProductionItem={() => addProductionItem(selectedLive.id)}
+                      onAddTicket={() => addTicket(selectedLive.id)}
+                      onDeleteProductionItem={(itemId) => deleteProductionItem(selectedLive.id, itemId)}
+                      onDeleteTicket={(ticketId) => deleteTicket(selectedLive.id, ticketId)}
+                      onLiveStatusChange={(status) => setLiveStatus(selectedLive.id, status)}
+                      onDriveFolderUrlChange={(driveFolderUrl) =>
+                        updateLiveDriveFolderUrl(selectedLive.id, driveFolderUrl)
+                      }
+                      onTicketChange={(ticketId, updates) => updateTicket(selectedLive.id, ticketId, updates)}
+                      onProductionItemChange={(itemId, updates) =>
+                        updateProductionItem(selectedLive.id, itemId, updates)
+                      }
+                    />
+                  ) : (
+                    <div className="emptyState liveEmptyState">
+                      <CalendarDays size={24} />
+                      <span>このグループにはまだライブがありません</span>
+                    </div>
+                  )}
                 </section>
               </aside>
               {!isDrawerOpen && actionScrollHint.top && (
@@ -1359,6 +2048,170 @@ function App() {
                 </div>
               )}
             </div>
+
+            {isTemplateEditorOpen && (
+              <aside className="templateOverlay">
+                <div className="drawerHeader templateHeader">
+                  <div>
+                    <h2>タスクテンプレート</h2>
+                    <span>ライブ作成時に自動生成するタスクを管理します</span>
+                  </div>
+                  <button className="iconButton" onClick={() => setIsTemplateEditorOpen(false)} type="button">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="templateTop">
+                  <label>
+                    <span>編集するテンプレート</span>
+                    <select
+                      value={templateDraft.id}
+                      onChange={(event) => {
+                        const template = taskTemplateSets.find((item) => item.id === event.target.value);
+                        if (template) setTemplateDraft(cloneTaskTemplateSet(template));
+                      }}
+                    >
+                      {taskTemplateSets.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className="secondaryButton" onClick={startNewTemplateDraft} type="button">
+                    <Plus size={15} />
+                    新規
+                  </button>
+                </div>
+
+                <div className="templateMeta">
+                  <label>
+                    <span>テンプレート名</span>
+                    <input
+                      value={templateDraft.name}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, name: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    <span>対象</span>
+                    <select
+                      value={templateDraft.liveType}
+                      onChange={(event) =>
+                        setTemplateDraft((current) => ({
+                          ...current,
+                          liveType: event.target.value as TaskTemplateSet["liveType"],
+                        }))
+                      }
+                    >
+                      <option>共通</option>
+                      <option>ワンマン</option>
+                      <option>定期公演</option>
+                      <option>生誕祭</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="templateTaskList">
+                  {templateDraft.items.map((item, index) => (
+                    <section className="templateTaskCard" key={item.id}>
+                      <div className="templateTaskHead">
+                        <strong>{index + 1}</strong>
+                        <input
+                          aria-label="テンプレートタスク名"
+                          value={item.title}
+                          onChange={(event) => updateTemplateDraftItem(item.id, { title: event.target.value })}
+                          placeholder="タスク名"
+                        />
+                        <button
+                          className="iconButton compact"
+                          disabled={templateDraft.items.length <= 1}
+                          onClick={() => deleteTemplateDraftItem(item.id)}
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className="templateTaskFields">
+                        <label>
+                          <span>カテゴリ</span>
+                          <select
+                            value={item.phase}
+                            onChange={(event) =>
+                              updateTemplateDraftItem(item.id, { phase: event.target.value as Phase })
+                            }
+                          >
+                            {phaseOrder.map((phase) => (
+                              <option key={phase}>{phase}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>期日</span>
+                          <select
+                            value={item.offset}
+                            onChange={(event) =>
+                              updateTemplateDraftItem(item.id, { offset: Number(event.target.value) })
+                            }
+                          >
+                            {[-120, -90, -75, -60, -45, -30, -21, -14, -7, -3, -1, 0].map((offset) => (
+                              <option key={offset} value={offset}>
+                                {offset === 0 ? "当日" : `${Math.abs(offset)}日前`}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>担当</span>
+                          <select
+                            value={item.owner}
+                            onChange={(event) => updateTemplateDraftItem(item.id, { owner: event.target.value })}
+                          >
+                            {managers.map((manager) => (
+                              <option key={manager}>{manager}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>重要度</span>
+                          <select
+                            value={item.priority}
+                            onChange={(event) =>
+                              updateTemplateDraftItem(item.id, { priority: event.target.value as Priority })
+                            }
+                          >
+                            <option>必須</option>
+                            <option>重要</option>
+                            <option>通常</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label className="templateSubtasks">
+                        <span>サブタスク</span>
+                        <textarea
+                          value={item.subtasks.join("\n")}
+                          onChange={(event) =>
+                            updateTemplateDraftItem(item.id, {
+                              subtasks: event.target.value.split(/\r?\n/),
+                            })
+                          }
+                          placeholder="1行に1つずつ入力"
+                        />
+                      </label>
+                    </section>
+                  ))}
+                </div>
+
+                <div className="templateFooter">
+                  <button className="secondaryButton" onClick={addTemplateDraftItem} type="button">
+                    <Plus size={15} />
+                    タスクを追加
+                  </button>
+                  <button className="primaryButton" onClick={saveTaskTemplate} type="button">
+                    保存
+                  </button>
+                </div>
+              </aside>
+            )}
 
             {isDrawerOpen && (
               <aside className="createOverlay">
@@ -1421,14 +2274,38 @@ function App() {
                       value={newLive.manager}
                       onChange={(event) => setNewLive({ ...newLive, manager: event.target.value })}
                     >
-                      {managers
-                        .filter((manager) => manager !== "外注")
-                        .map((manager) => (
-                          <option key={manager}>{manager}</option>
-                        ))}
+                      {managers.map((manager) => (
+                        <option key={manager}>{manager}</option>
+                      ))}
                     </select>
                   </label>
                 </div>
+                <label>
+                  <span>タスクテンプレート</span>
+                  <select
+                    value={selectedCreateTemplateId}
+                    onChange={(event) => setSelectedCreateTemplateId(event.target.value)}
+                  >
+                    {taskTemplateSets.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} / {template.liveType}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>進行表テンプレート</span>
+                  <select
+                    value={selectedRunScheduleTemplateId}
+                    onChange={(event) => setSelectedRunScheduleTemplateId(event.target.value)}
+                  >
+                    {runScheduleTemplateSets.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} / {template.liveType}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button className="primaryButton full" type="submit">
                   <CopyPlus size={18} />
                   作成
@@ -1437,7 +2314,7 @@ function App() {
               </aside>
             )}
 
-            {isScheduleOpen && (
+            {isScheduleOpen && selectedLive && (
               <aside className="scheduleOverlay">
                 <div className="drawerHeader">
                   <div>
@@ -1452,7 +2329,11 @@ function App() {
                 </div>
                 <RunScheduleManager
                   project={selectedLive}
+                  runScheduleTemplates={runScheduleTemplateSets}
+                  selectedTemplateId={selectedRunScheduleTemplateId}
                   onScheduleItemsChange={(scheduleItems) => updateScheduleItems(selectedLive.id, scheduleItems)}
+                  onSelectedTemplateChange={setSelectedRunScheduleTemplateId}
+                  onTemplateSave={saveRunScheduleTemplate}
                 />
               </aside>
             )}
@@ -1465,24 +2346,30 @@ function App() {
 }
 
 function ManagerView({
+  groups,
   managerContactFilter,
   managerGroupFilter,
+  managerRoleFilter,
   projects,
   selectedManagerIssueId,
   selectedManagerLiveId,
   setManagerContactFilter,
   setManagerGroupFilter,
+  setManagerRoleFilter,
   setSelectedManagerIssueId,
   setSelectedManagerLiveId,
   onOpenIssue,
 }: {
+  groups: GroupPage[];
   managerContactFilter: string;
   managerGroupFilter: string;
+  managerRoleFilter: TaskRoleFilter;
   projects: LiveProject[];
   selectedManagerIssueId: string;
   selectedManagerLiveId: string;
   setManagerContactFilter: (value: string | ((current: string) => string)) => void;
   setManagerGroupFilter: (value: string) => void;
+  setManagerRoleFilter: (value: TaskRoleFilter) => void;
   setSelectedManagerIssueId: (value: string | ((current: string) => string)) => void;
   setSelectedManagerLiveId: (value: string) => void;
   onOpenIssue: (issue: ManagerIssue) => void;
@@ -1507,14 +2394,15 @@ function ManagerView({
           const soon = projectIssues.filter((issue) => issue.tags.includes("3日以内")).length;
           const confirm = projectIssues.filter((issue) => issue.tags.includes("確認待ち")).length;
           const external = projectIssues.filter((issue) => issue.tags.includes("外注")).length;
+          const unrequested = projectIssues.filter((issue) => issue.tags.includes("未依頼")).length;
           const requiredOpen = project.tasks.filter(
             (task) => task.priority === "必須" && task.status !== "完了",
           ).length;
-          const score = late * 5 + todayCount * 4 + soon * 2 + confirm * 2 + external + requiredOpen * 2;
+          const score = late * 5 + todayCount * 4 + soon * 2 + confirm * 2 + unrequested * 2 + external + requiredOpen * 2;
           const risk: ManagerRisk =
             late > 0 || requiredOpen >= 3
               ? "high"
-              : todayCount > 0 || soon > 0 || confirm > 0 || external > 0 || requiredOpen > 0
+              : todayCount > 0 || soon > 0 || confirm > 0 || unrequested > 0 || external > 0 || requiredOpen > 0
                 ? "warn"
                 : "ok";
           const contacts = contactBreakdown(projectIssues, project.manager);
@@ -1526,6 +2414,7 @@ function ManagerView({
             soon,
             confirm,
             external,
+            unrequested,
             requiredOpen,
             contacts,
             score,
@@ -1536,17 +2425,41 @@ function ManagerView({
     [activeProjects, issues],
   );
   const selectedLive = liveSummaries.find((item) => item.project.id === selectedManagerLiveId) ?? liveSummaries[0];
-  const filteredSelectedIssues =
+  const contactFilteredSelectedIssues =
     selectedLive && managerContactFilter !== "全員"
       ? selectedLive.issues.filter((issue) => issue.owner === managerContactFilter)
       : selectedLive?.issues ?? [];
+  const filteredSelectedIssues =
+    managerRoleFilter === "全ロール"
+      ? contactFilteredSelectedIssues
+      : contactFilteredSelectedIssues.filter((issue) => getManagerIssueRole(issue, selectedLive?.project) === managerRoleFilter);
+  const managerRoleOptions = taskRoleFilters.filter((role) =>
+    role === "全ロール" ? true : contactFilteredSelectedIssues.some((issue) => getManagerIssueRole(issue, selectedLive?.project) === role),
+  );
+  const issueSections = [
+    {
+      key: "task",
+      title: "タスク",
+      issues: filteredSelectedIssues.filter((issue) => managerIssueType(issue) === "task"),
+    },
+    {
+      key: "production",
+      title: "制作物",
+      issues: filteredSelectedIssues.filter((issue) => managerIssueType(issue) === "production"),
+    },
+    {
+      key: "ticket",
+      title: "チケット",
+      issues: filteredSelectedIssues.filter((issue) => managerIssueType(issue) === "ticket"),
+    },
+  ].filter((section) => section.issues.length > 0);
   const selectedManagerIssue = filteredSelectedIssues.find((issue) => issue.id === selectedManagerIssueId);
   const summaryCounts = {
     high: liveSummaries.filter((item) => item.risk === "high").length,
     warn: liveSummaries.filter((item) => item.risk === "warn").length,
     ok: liveSummaries.filter((item) => item.risk === "ok").length,
   };
-  const groupedSummaries = groupPages
+  const groupedSummaries = groups
     .map((group) => ({
       group,
       items: liveSummaries.filter((item) => item.project.group === group.name),
@@ -1561,6 +2474,7 @@ function ManagerView({
     if (item.late > 0) return `${item.late}件の遅延が止まっています`;
     if (item.requiredOpen > 0) return `${item.requiredOpen}件の必須タスクが未完です`;
     if (item.today + item.soon > 0) return `${item.today + item.soon}件が3日以内に締切です`;
+    if (item.unrequested > 0) return `${item.unrequested}件の制作物が未依頼です`;
     if (item.confirm > 0) return `${item.confirm}件が確認待ちです`;
     if (item.external > 0) return `${item.external}件が外注先で進行中です`;
     return "現時点で目立つ停止要因はありません";
@@ -1577,10 +2491,13 @@ function ManagerView({
     if (managerContactFilter !== "全員" && !liveSummaries.find((item) => item.project.id === selectedManagerLiveId)?.contacts.some((contact) => contact.owner === managerContactFilter)) {
       setManagerContactFilter("全員");
     }
+    if (managerRoleFilter !== "全ロール" && !managerRoleOptions.includes(managerRoleFilter)) {
+      setManagerRoleFilter("全ロール");
+    }
     if (selectedManagerIssueId && !filteredSelectedIssues.some((issue) => issue.id === selectedManagerIssueId)) {
       setSelectedManagerIssueId("");
     }
-  }, [filteredSelectedIssues, liveSummaries, managerContactFilter, selectedManagerIssueId, selectedManagerLiveId]);
+  }, [filteredSelectedIssues, liveSummaries, managerContactFilter, managerRoleFilter, managerRoleOptions, selectedManagerIssueId, selectedManagerLiveId]);
 
   return (
     <section className="managerView liveManagerView">
@@ -1595,11 +2512,12 @@ function ManagerView({
                   onChange={(event) => {
                     setManagerGroupFilter(event.target.value);
                     setManagerContactFilter("全員");
+                    setManagerRoleFilter("全ロール");
                     setSelectedManagerIssueId("");
                   }}
                 >
                   <option>全グループ</option>
-                  {groupPages.map((group) => (
+                  {groups.map((group) => (
                     <option key={group.name}>{group.name}</option>
                   ))}
                 </select>
@@ -1628,6 +2546,7 @@ function ManagerView({
                     onClick={() => {
                       setSelectedManagerLiveId(item.project.id);
                       setManagerContactFilter("全員");
+                      setManagerRoleFilter("全ロール");
                       setSelectedManagerIssueId("");
                     }}
                     type="button"
@@ -1690,7 +2609,6 @@ function ManagerView({
               </div>
 
               <div className="managerContactPanel">
-                <span>優先連絡先</span>
                 {selectedLive.contacts.length > 0 ? (
                   <div className="managerContactChips">
                     <button
@@ -1719,6 +2637,27 @@ function ManagerView({
                 ) : (
                   <div className="managerNoContact">連絡不要</div>
                 )}
+                <div className="managerRoleChips">
+                  {managerRoleOptions.map((role) => (
+                    <button
+                      className={managerRoleFilter === role ? "active" : ""}
+                      key={role}
+                      onClick={() => {
+                        setManagerRoleFilter(role);
+                        setSelectedManagerIssueId("");
+                      }}
+                      type="button"
+                    >
+                      {role}
+                      <small>
+                        {role === "全ロール"
+                          ? contactFilteredSelectedIssues.length
+                          : contactFilteredSelectedIssues.filter((issue) => getManagerIssueRole(issue, selectedLive.project) === role).length}
+                        件
+                      </small>
+                    </button>
+                  ))}
+                </div>
               </div>
 
 
@@ -1727,35 +2666,45 @@ function ManagerView({
                 <span>{filteredSelectedIssues.length}件</span>
               </div>
               <div className="selectedLiveIssues">
-                {filteredSelectedIssues.map((issue) => (
-                  <div className="selectedLiveIssueEntry" key={issue.id}>
-                    <button
-                      className={`selectedLiveIssue risk-${issueRisk(issue)} ${selectedManagerIssueId === issue.id ? "active" : ""}`}
-                      onClick={() =>
-                        setSelectedManagerIssueId((current) => (current === issue.id ? "" : issue.id))
-                      }
-                      type="button"
-                    >
-                      <StatusPill value={issue.kind} />
+                {issueSections.map((section) => (
+                  <div className="selectedLiveIssueSection" key={section.key}>
+                    <div className="selectedLiveIssueSectionHead">
                       <div>
-                        <strong>{issue.title}</strong>
-                        <span>
-                          連絡: {issue.owner}
-                          {issue.date ? ` / 期日 ${formatDate(issue.date)}` : ""}
-                          {issue.detail ? ` / ${issue.detail}` : ""}
-                        </span>
+                        <strong>{section.title}</strong>
                       </div>
-                    </button>
-                    {selectedManagerIssue?.id === issue.id && (
-                      <ManagerIssueEditor
-                        issue={issue}
-                        project={selectedLive.project}
-                        onOpenIssue={onOpenIssue}
-                      />
-                    )}
+                      <span>{section.issues.length}件</span>
+                    </div>
+                    {section.issues.map((issue) => (
+                      <div className="selectedLiveIssueEntry" key={issue.id}>
+                        <button
+                          className={`selectedLiveIssue risk-${issueRisk(issue)} ${selectedManagerIssueId === issue.id ? "active" : ""}`}
+                          onClick={() =>
+                            setSelectedManagerIssueId((current) => (current === issue.id ? "" : issue.id))
+                          }
+                          type="button"
+                        >
+                          <StatusPill value={issue.kind} />
+                          <div>
+                            <strong>{issue.title}</strong>
+                            <span>
+                              連絡: {issue.owner}
+                              {issue.date ? ` / 期日 ${formatDate(issue.date)}` : ""}
+                              {issue.detail ? ` / ${issue.detail}` : ""}
+                            </span>
+                          </div>
+                        </button>
+                        {selectedManagerIssue?.id === issue.id && (
+                          <ManagerIssueEditor
+                            issue={issue}
+                            project={selectedLive.project}
+                            onOpenIssue={onOpenIssue}
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ))}
-                {filteredSelectedIssues.length === 0 && (
+                {issueSections.length === 0 && (
                   <div className="managerEmpty">該当する停止原因はありません</div>
                 )}
               </div>
@@ -1768,6 +2717,457 @@ function ManagerView({
     </section>
   );
 }
+
+function ChekiStaffView({
+  groups,
+  projects,
+}: {
+  groups: GroupPage[];
+  projects: LiveProject[];
+}) {
+  const [groupFilter, setGroupFilter] = useState("全グループ");
+  const [statusFilter, setStatusFilter] = useState<"募集中" | "応募済み" | "確定" | "全て">("募集中");
+  const [appliedShiftIds, setAppliedShiftIds] = useState<string[]>([]);
+  const [pendingChekiAction, setPendingChekiAction] = useState<{
+    type: "apply" | "cancel";
+    shift: ChekiShift;
+  } | null>(null);
+  const shifts = useMemo(() => createChekiShifts(projects), [projects]);
+  const shiftsWithApplication = shifts.map((shift) => ({
+    ...shift,
+    status: appliedShiftIds.includes(shift.id) && shift.status === "募集中" ? "応募済み" as const : shift.status,
+  }));
+  const groupFilteredShifts = shiftsWithApplication.filter(
+    (shift) => groupFilter === "全グループ" || shift.group === groupFilter,
+  );
+  const chekiDateStatuses = useMemo(
+    () =>
+      groupFilteredShifts.reduce<Record<string, ChekiCalendarDateStatus>>((statuses, shift) => {
+        if (shift.status === "募集中") {
+          statuses[shift.date] = "available";
+        } else if (!statuses[shift.date]) {
+          statuses[shift.date] = "full";
+        }
+        return statuses;
+      }, {}),
+    [groupFilteredShifts],
+  );
+  const visibleShifts = groupFilteredShifts
+    .map((shift) => ({
+      ...shift,
+      status: appliedShiftIds.includes(shift.id) && shift.status === "募集中" ? "応募済み" as const : shift.status,
+    }))
+    .filter((shift) => statusFilter === "全て" || shift.status === statusFilter)
+    .sort((a, b) => `${a.date}${a.timeRange}${a.liveTitle}`.localeCompare(`${b.date}${b.timeRange}${b.liveTitle}`));
+  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const selectedShift = visibleShifts.find((shift) => shift.id === selectedShiftId) ?? visibleShifts[0];
+  const ownShifts = shiftsWithApplication
+    .filter((shift) => shift.status === "確定" || appliedShiftIds.includes(shift.id))
+    .sort((a, b) => `${a.date}${a.timeRange}${a.liveTitle}`.localeCompare(`${b.date}${b.timeRange}${b.liveTitle}`));
+  const [selectedOwnShiftId, setSelectedOwnShiftId] = useState("");
+  const selectedOwnShift = ownShifts.find((shift) => shift.id === selectedOwnShiftId) ?? ownShifts[0];
+  const availableCount = shiftsWithApplication.filter((shift) => shift.status === "募集中").length;
+  const appliedCount = shiftsWithApplication.filter((shift) => shift.status === "応募済み").length;
+  const confirmedCount = shiftsWithApplication.filter((shift) => shift.status === "確定").length;
+
+  useEffect(() => {
+    if (!visibleShifts.length) {
+      setSelectedShiftId("");
+      return;
+    }
+    if (!visibleShifts.some((shift) => shift.id === selectedShiftId)) {
+      setSelectedShiftId(visibleShifts[0].id);
+    }
+  }, [selectedShiftId, visibleShifts]);
+
+  useEffect(() => {
+    if (!ownShifts.length) {
+      setSelectedOwnShiftId("");
+      return;
+    }
+    if (!ownShifts.some((shift) => shift.id === selectedOwnShiftId)) {
+      setSelectedOwnShiftId(ownShifts[0].id);
+    }
+  }, [ownShifts, selectedOwnShiftId]);
+
+  const applyShift = (shiftId: string) => {
+    setAppliedShiftIds((current) => (current.includes(shiftId) ? current : [...current, shiftId]));
+  };
+
+  const cancelShift = (shiftId: string) => {
+    setAppliedShiftIds((current) => current.filter((id) => id !== shiftId));
+  };
+
+  const confirmChekiAction = () => {
+    if (!pendingChekiAction) return;
+    if (pendingChekiAction.type === "apply") {
+      applyShift(pendingChekiAction.shift.id);
+    } else {
+      cancelShift(pendingChekiAction.shift.id);
+    }
+    setPendingChekiAction(null);
+  };
+
+  return (
+    <section className="chekiView">
+      <section className="chekiHero">
+        <div>
+          <span>Cheki staff portal</span>
+          <h2>チェキスタッフ募集</h2>
+          <p>今後はログインしたチェキスタッフをこの画面へ自動遷移させる想定です。現時点ではUI確認用の仮画面です。</p>
+        </div>
+        <div className="chekiStats">
+          <div>
+            <b>{availableCount}</b>
+            <span>募集中</span>
+          </div>
+          <div>
+            <b>{appliedCount}</b>
+            <span>応募済み</span>
+          </div>
+          <div>
+            <b>{confirmedCount}</b>
+            <span>確定</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="chekiGrid">
+        <section className="chekiPanel chekiBoard">
+          <ChekiLiveCalendar
+            dateStatuses={chekiDateStatuses}
+            selectedDate={selectedShift?.date ?? toIsoDate(today)}
+            onSelectDate={(date) => {
+              const nextShift = visibleShifts.find((shift) => shift.date === date)
+                ?? groupFilteredShifts.find((shift) => shift.date === date);
+              if (!nextShift) return;
+              if (statusFilter !== "全て" && nextShift.status !== statusFilter) {
+                setStatusFilter("全て");
+              }
+              setSelectedShiftId(nextShift.id);
+            }}
+          />
+          <div className="chekiFilters">
+            <label>
+              <span>グループ</span>
+              <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
+                <option>全グループ</option>
+                {groups.map((group) => (
+                  <option key={group.name}>{group.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>状態</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              >
+                <option>募集中</option>
+                <option>応募済み</option>
+                <option>確定</option>
+                <option>全て</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="chekiShiftList">
+            {visibleShifts.map((shift) => (
+              <button
+                className={`chekiShiftCard ${selectedShift?.id === shift.id ? "selected" : ""}`}
+                key={shift.id}
+                onClick={() => setSelectedShiftId(shift.id)}
+                type="button"
+              >
+                <div className="chekiShiftTitle">
+                  <div>
+                    <span>{formatDate(shift.date)} / {shift.timeRange}</span>
+                    <strong>{shift.liveTitle}</strong>
+                  </div>
+                  <StatusPill value={shift.status} />
+                </div>
+                <div className="chekiShiftMeta">
+                  <span>{shift.group}</span>
+                  <span>@{shift.venue}</span>
+                  <span>{shift.assignedCount}/{shift.requiredCount}名</span>
+                </div>
+              </button>
+            ))}
+            {visibleShifts.length === 0 && <div className="managerEmpty">表示する募集枠はありません</div>}
+          </div>
+        </section>
+
+        <section className="chekiPanel chekiDetail">
+          {selectedShift ? (
+            <>
+              <div className="chekiDetailHead">
+                <div>
+                  <span>{selectedShift.group}</span>
+                  <h3>{selectedShift.liveTitle}</h3>
+                </div>
+                <StatusPill value={selectedShift.status} />
+              </div>
+
+              <div className="chekiInfoGrid compact">
+                <span>
+                  <CalendarDays size={15} />
+                  日程 <strong>{formatDate(selectedShift.date)}</strong>
+                </span>
+                <span>
+                  <Clock3 size={15} />
+                  時間 <strong>{selectedShift.timeRange}</strong>
+                </span>
+                <span>
+                  <UserRound size={15} />
+                  募集 <strong>{selectedShift.assignedCount}/{selectedShift.requiredCount}名</strong>
+                </span>
+                <span>
+                  <Sparkles size={15} />
+                  場所 <strong>{selectedShift.venue}</strong>
+                </span>
+                <span className="cancelRule">
+                  <CircleAlert size={15} />
+                  キャンセル <strong>{selectedShift.cancelUntil}まで</strong>
+                </span>
+              </div>
+
+              <div className="chekiDetailBox">
+                <strong>担当内容</strong>
+                <p>{selectedShift.role}</p>
+              </div>
+              <div className="chekiDetailBox">
+                <strong>メモ</strong>
+                <p>{selectedShift.memo}</p>
+              </div>
+
+              {appliedShiftIds.includes(selectedShift.id) ? (
+                <button
+                  className="chekiCancelButton"
+                  onClick={() => setPendingChekiAction({ type: "cancel", shift: selectedShift })}
+                  type="button"
+                >
+                  <X size={16} />
+                  応募をキャンセル
+                </button>
+              ) : (
+                <button
+                  className="chekiApplyButton"
+                  disabled={selectedShift.status !== "募集中"}
+                  onClick={() => setPendingChekiAction({ type: "apply", shift: selectedShift })}
+                  type="button"
+                >
+                  {selectedShift.status === "募集中" ? <Send size={16} /> : <Check size={16} />}
+                  {selectedShift.status === "募集中" ? "この枠に応募する" : `${selectedShift.status}です`}
+                </button>
+              )}
+
+              <div className="chekiNextNote">
+                <strong>今後の接続予定</strong>
+                <span>ログインユーザー判定、LINE募集文の自動作成、応募状況の保存、Googleカレンダー空き確認をここに接続します。</span>
+              </div>
+            </>
+          ) : (
+            <div className="managerEmpty">募集枠を選択してください</div>
+          )}
+        </section>
+
+        <section className="chekiPanel chekiSchedule">
+          <div className="chekiPanelHead">
+            <h3>自分の予定</h3>
+            <span>仮表示</span>
+          </div>
+          <div className="chekiConfirmedList">
+            {ownShifts.slice(0, 6).map((shift) => (
+                <button
+                  className={`chekiConfirmedItem ${selectedOwnShift?.id === shift.id ? "selected" : ""}`}
+                  key={shift.id}
+                  onClick={() => setSelectedOwnShiftId(shift.id)}
+                  type="button"
+                >
+                  <StatusPill value={appliedShiftIds.includes(shift.id) ? "応募済み" : shift.status} />
+                  <div>
+                    <strong>{formatDate(shift.date)} {shift.timeRange}</strong>
+                    <span>{shift.liveTitle}</span>
+                  </div>
+                </button>
+              ))}
+            {ownShifts.length === 0 && (
+              <div className="managerEmpty">応募・確定済みの予定はありません</div>
+            )}
+          </div>
+          {selectedOwnShift && (
+            <div className="chekiOwnDetail">
+              <strong>{selectedOwnShift.liveTitle}</strong>
+              <span>場所: {selectedOwnShift.venue}</span>
+              <span>集合時間: {selectedOwnShift.meetingTime}</span>
+              <span>集合場所: {selectedOwnShift.meetingPlace}</span>
+              <span>持ち物: {selectedOwnShift.belongings}</span>
+              {appliedShiftIds.includes(selectedOwnShift.id) && (
+                <button
+                  className="chekiOwnCancelButton"
+                  onClick={() => setPendingChekiAction({ type: "cancel", shift: selectedOwnShift })}
+                  type="button"
+                >
+                  応募をキャンセル
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+      {pendingChekiAction && (
+        <div className="chekiConfirmOverlay" role="dialog" aria-modal="true">
+          <div className="chekiConfirmDialog">
+            <span>{pendingChekiAction.type === "apply" ? "応募確認" : "キャンセル確認"}</span>
+            <h3>{pendingChekiAction.shift.liveTitle}</h3>
+            <p>
+              {formatDate(pendingChekiAction.shift.date)} {pendingChekiAction.shift.timeRange} / @
+              {pendingChekiAction.shift.venue}
+            </p>
+            <strong>
+              {pendingChekiAction.type === "apply"
+                ? "この募集枠に応募しますか？"
+                : "この応募をキャンセルしますか？"}
+            </strong>
+            <div>
+              <button className="secondary" onClick={() => setPendingChekiAction(null)} type="button">
+                戻る
+              </button>
+              <button
+                className={pendingChekiAction.type === "cancel" ? "danger" : ""}
+                onClick={confirmChekiAction}
+                type="button"
+              >
+                {pendingChekiAction.type === "apply" ? "応募する" : "キャンセルする"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function createChekiShifts(projects: LiveProject[]): ChekiShift[] {
+  return projects
+    .filter((project) => project.status !== "完了" && daysUntil(project.eventDate) >= 0)
+    .sort((a, b) => `${a.eventDate}${a.title}`.localeCompare(`${b.eventDate}${b.title}`))
+    .slice(0, 14)
+    .map((project, index) => {
+      const requiredCount = project.liveType === "ワンマン" ? 6 : project.liveType === "生誕祭" ? 5 : 3;
+      const assignedCount = Math.min(requiredCount, (index % 4) + 1);
+      const status: ChekiShift["status"] =
+        index % 5 === 0 ? "確定" : assignedCount >= requiredCount ? "応募済み" : "募集中";
+      return {
+        id: `cheki-${project.id}`,
+        liveId: project.id,
+        group: project.group,
+        liveTitle: project.title,
+        venue: project.venue,
+        date: project.eventDate,
+        timeRange: project.liveType === "ワンマン" ? "16:30-21:30" : "18:00-21:30",
+        role: "チェキ列整理、撮影補助、販売導線の案内、終演後の物販撤収補助",
+        requiredCount,
+        assignedCount,
+        status,
+        cancelUntil: formatDate(addDays(toDate(project.eventDate), -3)),
+        meetingTime: project.liveType === "ワンマン" ? "16:00" : "17:30",
+        meetingPlace: `${project.venue} 入口付近`,
+        belongings: "黒系の服装、身分証、筆記用具、飲み物",
+        memo: project.liveType === "生誕祭"
+          ? "生誕導線があるため、開場前の集合時間を確認してください。"
+          : "服装は黒系推奨。集合場所は確定後に共有します。",
+      };
+    });
+}
+
+function ChekiLiveCalendar({
+  dateStatuses,
+  selectedDate,
+  onSelectDate,
+}: {
+  dateStatuses: Record<string, ChekiCalendarDateStatus>;
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+}) {
+  const [visibleMonth, setVisibleMonth] = useState(firstDayOfMonth(selectedDate));
+
+  useEffect(() => {
+    setVisibleMonth(firstDayOfMonth(selectedDate));
+  }, [selectedDate]);
+
+  const anchor = toDate(visibleMonth);
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weeksInGrid = Math.max(5, Math.ceil((startOffset + daysInMonth) / 7));
+  const gridStart = new Date(year, month, 1 - startOffset);
+  const cells = Array.from({ length: weeksInGrid * 7 }, (_, index) => {
+    const cellDate = new Date(gridStart);
+    cellDate.setDate(gridStart.getDate() + index);
+    const date = toIsoDate(cellDate);
+    return {
+      date,
+      inMonth: cellDate.getFullYear() === year && cellDate.getMonth() === month,
+      dayOfWeek: cellDate.getDay(),
+      status: dateStatuses[date],
+    };
+  });
+
+  const moveMonth = (offset: number) => {
+    setVisibleMonth(toIsoDate(new Date(year, month + offset, 1)));
+  };
+
+  return (
+    <div className="chekiLiveCalendar">
+      <div className="chekiLiveCalendarHead">
+        <div>
+          <CalendarDays size={15} />
+          <strong>ライブカレンダー</strong>
+          <span>{year}/{month + 1}</span>
+        </div>
+        <div>
+          <button aria-label="前月" onClick={() => moveMonth(-1)} type="button">
+            <ChevronLeft size={14} />
+          </button>
+          <button aria-label="翌月" onClick={() => moveMonth(1)} type="button">
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="chekiCalendarWeekdays">
+        {["日", "月", "火", "水", "木", "金", "土"].map((day, index) => (
+          <span className={index === 0 ? "sunday" : index === 6 ? "saturday" : ""} key={day}>
+            {day}
+          </span>
+        ))}
+      </div>
+      <div className="chekiCalendarGrid">
+        {cells.map((cell) => (
+          <button
+            className={`${cell.inMonth ? "" : "otherMonth"} ${cell.status ? "hasLive" : ""} ${
+              cell.status === "available" ? "available" : cell.status === "full" ? "full" : ""
+            } ${
+              cell.date === selectedDate ? "selected" : ""
+            } ${cell.date === toIsoDate(today) ? "today" : ""} ${
+              cell.dayOfWeek === 0 ? "sunday" : cell.dayOfWeek === 6 ? "saturday" : ""
+            }`}
+            disabled={!cell.status}
+            key={cell.date}
+            onClick={() => onSelectDate(cell.date)}
+            type="button"
+          >
+            <span>{toDate(cell.date).getDate()}</span>
+            {cell.status && <b>{cell.status === "available" ? "○" : "×"}</b>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ManagerIssueEditor({
   issue,
   project,
@@ -1812,9 +3212,12 @@ function ManagerIssueEditor({
         </div>
         <ReadOnlyRows
           rows={[
+            ["担当", productionItem.owner],
+            ["担当デザイナー", productionItem.designer || "未入力"],
             ["外注先", productionItem.vendor],
             ["状態", productionItem.status],
             ["URL", productionItem.fileUrl || "未入力"],
+            ["メモ", productionItem.memo || "なし"],
           ]}
         />
         <button className="primaryButton full" onClick={() => onOpenIssue(issue)} type="button">
@@ -1888,19 +3291,21 @@ function riskLabel(risk: string) {
 function contactBreakdown(issues: ManagerIssue[], fallback: string): ManagerContact[] {
   void fallback;
   if (issues.length === 0) return [];
-  const contacts = new Map<string, { count: number; late: number; today: number; confirm: number; external: number; score: number }>();
+  const contacts = new Map<string, { count: number; late: number; today: number; confirm: number; unrequested: number; external: number; score: number }>();
   issues.forEach((issue) => {
-    const current = contacts.get(issue.owner) ?? { count: 0, late: 0, today: 0, confirm: 0, external: 0, score: 0 };
+    const current = contacts.get(issue.owner) ?? { count: 0, late: 0, today: 0, confirm: 0, unrequested: 0, external: 0, score: 0 };
     const late = issue.tags.includes("遅延") ? 1 : 0;
     const todayIssue = issue.tags.includes("今日") ? 1 : 0;
     const confirm = issue.tags.includes("確認待ち") ? 1 : 0;
+    const unrequested = issue.tags.includes("未依頼") ? 1 : 0;
     const external = issue.tags.includes("外注") ? 1 : 0;
     current.count += 1;
     current.late += late;
     current.today += todayIssue;
     current.confirm += confirm;
+    current.unrequested += unrequested;
     current.external += external;
-    current.score += late * 5 + todayIssue * 3 + confirm * 3 + external + 1;
+    current.score += late * 5 + todayIssue * 3 + confirm * 3 + unrequested * 2 + external + 1;
     contacts.set(issue.owner, current);
   });
   return [...contacts.entries()]
@@ -1914,19 +3319,34 @@ function contactBreakdown(issues: ManagerIssue[], fallback: string): ManagerCont
     .slice(0, 3);
 }
 
-function contactReasonFromCounts(value: { count: number; late: number; today: number; confirm: number; external: number }) {
+function contactReasonFromCounts(value: { count: number; late: number; today: number; confirm: number; unrequested: number; external: number }) {
   if (value.late > 0) return `${value.late}件の遅延が集中しています`;
   if (value.today > 0) return `${value.today}件が今日締切です`;
   if (value.confirm > 0) return `${value.confirm}件が制作確認待ちです`;
+  if (value.unrequested > 0) return `${value.unrequested}件の制作物が未依頼です`;
   if (value.external > 0) return `${value.external}件が外注対応中です`;
   return `${value.count}件の確認項目があります`;
 }
 
 function issueRisk(issue: ManagerIssue) {
   if (issue.tags.includes("遅延")) return "high";
-  if (issue.tags.includes("今日") || issue.tags.includes("3日以内") || issue.tags.includes("確認待ち")) return "warn";
+  if (issue.tags.includes("今日") || issue.tags.includes("3日以内") || issue.tags.includes("確認待ち") || issue.tags.includes("未依頼")) return "warn";
   return "ok";
 }
+
+function managerIssueType(issue: ManagerIssue): "task" | "production" | "ticket" {
+  if (issue.productionItemId) return "production";
+  if (issue.ticketId) return "ticket";
+  return "task";
+}
+
+function getManagerIssueRole(issue: ManagerIssue, project?: LiveProject): TaskRoleFilter {
+  if (issue.ticketId) return "チケット";
+  if (issue.productionItemId) return issue.owner === "外注" ? "制作・外注" : "デザイナー";
+  const task = project?.tasks.find((current) => current.id === issue.taskId);
+  return task ? getTaskRole(task) : "マネージャー";
+}
+
 function GroupList({
   activeGroup,
   groups,
@@ -1934,7 +3354,7 @@ function GroupList({
   onSelect,
 }: {
   activeGroup: string;
-  groups: typeof groupPages;
+  groups: GroupPage[];
   projects: LiveProject[];
   onSelect: (groupName: string) => void;
 }) {
@@ -1991,6 +3411,105 @@ function GroupList({
           <ChevronDown size={14} />
         </div>
       )}
+    </div>
+  );
+}
+
+function GroupEditor({
+  editingGroupName,
+  editorRef,
+  form,
+  notice,
+  onChange,
+  onSubmit,
+}: {
+  editingGroupName: string | null;
+  editorRef: RefObject<HTMLDivElement | null>;
+  form: GroupForm;
+  notice: string;
+  onChange: (form: GroupForm) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const applyPhotoFile = (file?: File) => {
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        onChange({ ...form, photo: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePhotoSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    applyPhotoFile(event.target.files?.[0]);
+    event.target.value = "";
+  };
+
+  const handlePhotoDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    applyPhotoFile(event.dataTransfer.files[0]);
+  };
+
+  return (
+    <div className="groupEditor" ref={editorRef}>
+      <form className="groupEditorForm" onSubmit={onSubmit}>
+        <label>
+          <span>グループ名</span>
+          <input
+            value={form.name}
+            onChange={(event) => onChange({ ...form, name: event.target.value })}
+            placeholder={editingGroupName ? "グループ名" : "新規グループ名"}
+          />
+        </label>
+        <label>
+          <span>担当</span>
+          <select
+            value={form.manager}
+            onChange={(event) => onChange({ ...form, manager: event.target.value })}
+          >
+            {managers.map((manager) => (
+              <option key={manager}>{manager}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>画像</span>
+          <span
+            className="groupPhotoDrop"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handlePhotoDrop}
+          >
+            {form.photo ? (
+              <img alt="" src={form.photo} />
+            ) : (
+              <small>ドラッグ&ドロップ / 選択</small>
+            )}
+            <input accept="image/*" onChange={handlePhotoSelect} type="file" />
+          </span>
+        </label>
+        <label>
+          <span>画像URL</span>
+          <input
+            value={form.photo}
+            onChange={(event) => onChange({ ...form, photo: event.target.value })}
+            placeholder="未入力なら自動設定 / アップロードでも可"
+          />
+        </label>
+        <label>
+          <span>カレンダーURL</span>
+          <input
+            value={form.calendarUrl}
+            onChange={(event) => onChange({ ...form, calendarUrl: event.target.value })}
+            placeholder="Google Calendar / ICS"
+          />
+        </label>
+        <button className="primaryButton full" type="submit">
+          {editingGroupName ? "更新" : "追加"}
+        </button>
+      </form>
+      {notice && <p className="groupEditorNotice">{notice}</p>}
     </div>
   );
 }
@@ -2121,13 +3640,39 @@ function LiveCard({
   );
 }
 
+function ExternalLiveCard({ item }: { item: CalendarItem }) {
+  return (
+    <button className="liveCard externalLiveCard" type="button">
+      <div>
+        <strong>{item.title}</strong>
+      </div>
+      <div className="liveCardMeta">
+        <b>
+          {formatDate(item.date)}
+          {item.time ? ` ${item.time}` : ""}
+        </b>
+      </div>
+    </button>
+  );
+}
+
 function LiveSummary({
   project,
+  onAddProductionItem,
+  onAddTicket,
+  onDeleteProductionItem,
+  onDeleteTicket,
+  onDriveFolderUrlChange,
   onLiveStatusChange,
   onTicketChange,
   onProductionItemChange,
 }: {
   project: LiveProject;
+  onAddProductionItem: () => string;
+  onAddTicket: () => string;
+  onDeleteProductionItem: (itemId: string) => void;
+  onDeleteTicket: (ticketId: string) => void;
+  onDriveFolderUrlChange: (driveFolderUrl: string) => void;
   onLiveStatusChange: (status: LiveStatus) => void;
   onTicketChange: (ticketId: string, updates: Partial<TicketPlan>) => void;
   onProductionItemChange: (itemId: string, updates: Partial<ProductionItem>) => void;
@@ -2196,31 +3741,77 @@ function LiveSummary({
         ]}
       />
 
-      <TicketManager tickets={project.tickets} onTicketChange={onTicketChange} />
+      <DriveFolderField
+        url={project.driveFolderUrl ?? ""}
+        onChange={onDriveFolderUrlChange}
+      />
 
-      <ProductionManager items={project.productionItems} onProductionItemChange={onProductionItemChange} />
+      <TicketManager
+        tickets={project.tickets}
+        onAddTicket={onAddTicket}
+        onDeleteTicket={onDeleteTicket}
+        onTicketChange={onTicketChange}
+      />
+
+      <ProductionManager
+        items={project.productionItems}
+        onAddProductionItem={onAddProductionItem}
+        onDeleteProductionItem={onDeleteProductionItem}
+        onProductionItemChange={onProductionItemChange}
+      />
     </div>
   );
 }
 
 function TicketManager({
   tickets,
+  onAddTicket,
+  onDeleteTicket,
   onTicketChange,
 }: {
   tickets: TicketPlan[];
+  onAddTicket: () => string;
+  onDeleteTicket: (ticketId: string) => void;
   onTicketChange: (ticketId: string, updates: Partial<TicketPlan>) => void;
 }) {
   const [selectedTicketId, setSelectedTicketId] = useState("");
+  const [pendingDeleteTicketId, setPendingDeleteTicketId] = useState("");
   const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId);
 
   useEffect(() => {
     if (selectedTicketId && !tickets.some((ticket) => ticket.id === selectedTicketId)) {
       setSelectedTicketId("");
     }
-  }, [selectedTicketId, tickets]);
+    if (pendingDeleteTicketId && !tickets.some((ticket) => ticket.id === pendingDeleteTicketId)) {
+      setPendingDeleteTicketId("");
+    }
+  }, [pendingDeleteTicketId, selectedTicketId, tickets]);
+
+  useEffect(() => {
+    if (!pendingDeleteTicketId) return;
+    const resetPendingDelete = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".editorDangerZone")) return;
+      setPendingDeleteTicketId("");
+    };
+    document.addEventListener("pointerdown", resetPendingDelete);
+    return () => document.removeEventListener("pointerdown", resetPendingDelete);
+  }, [pendingDeleteTicketId]);
 
   return (
-    <CompactSection icon={<Ticket size={17} />} title="チケット">
+    <CompactSection
+      action={
+        <button
+          aria-label="チケット追加"
+          className="sectionAddButton"
+          onClick={() => setSelectedTicketId(onAddTicket())}
+          type="button"
+        >
+          <Plus size={16} />
+        </button>
+      }
+      icon={<Ticket size={17} />}
+      title="チケット"
+    >
       <div className="ticketRows">
         {tickets.map((ticket) => {
           const status = ticketStatus(ticket);
@@ -2243,7 +3834,22 @@ function TicketManager({
               </button>
 
               {isSelected && (
-                <TicketEditor ticket={ticket} onTicketChange={onTicketChange} />
+                <TicketEditor
+                  pendingDelete={pendingDeleteTicketId === ticket.id}
+                  ticket={ticket}
+                  onDelete={() => {
+                    if (pendingDeleteTicketId !== ticket.id) {
+                      setPendingDeleteTicketId(ticket.id);
+                      return;
+                    }
+                    onDeleteTicket(ticket.id);
+                    setPendingDeleteTicketId("");
+                  }}
+                  onTicketChange={(ticketId, updates) => {
+                    setPendingDeleteTicketId("");
+                    onTicketChange(ticketId, updates);
+                  }}
+                />
               )}
             </div>
           );
@@ -2253,11 +3859,46 @@ function TicketManager({
   );
 }
 
+function DriveFolderField({
+  url,
+  onChange,
+}: {
+  url: string;
+  onChange: (url: string) => void;
+}) {
+  const trimmedUrl = url.trim();
+
+  return (
+    <CompactSection icon={<PackageCheck size={17} />} title="Driveフォルダ">
+      <div className="driveFolderField">
+        <input
+          aria-label="Google DriveフォルダURL"
+          placeholder="Google DriveフォルダURL"
+          value={url}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          disabled={!trimmedUrl}
+          onClick={() => window.open(trimmedUrl, "_blank", "noopener,noreferrer")}
+          type="button"
+        >
+          開く
+        </button>
+      </div>
+      {!trimmedUrl && <small className="driveFolderHint">既存のDriveフォルダURLを登録できます。</small>}
+    </CompactSection>
+  );
+}
+
 function TicketEditor({
+  pendingDelete,
   ticket,
+  onDelete,
   onTicketChange,
 }: {
+  pendingDelete: boolean;
   ticket: TicketPlan;
+  onDelete: () => void;
   onTicketChange: (ticketId: string, updates: Partial<TicketPlan>) => void;
 }) {
   const saleDate = ticket.saleStart.slice(0, 10);
@@ -2331,55 +3972,136 @@ function TicketEditor({
           onChange={(event) => onTicketChange(ticket.id, { benefit: event.target.value })}
         />
       </label>
+      <div className="editorDangerZone">
+        {ticket.pageUrl?.trim() && (
+          <button
+            className="editorOpenButton"
+            onClick={() => window.open(ticket.pageUrl, "_blank", "noopener,noreferrer")}
+            type="button"
+          >
+            開く
+          </button>
+        )}
+        <button className={pendingDelete ? "confirm" : ""} onClick={onDelete} type="button">
+          {pendingDelete ? "もう一度押すと削除" : "削除"}
+        </button>
+      </div>
     </div>
   );
 }
 
 function ProductionManager({
   items,
+  onAddProductionItem,
+  onDeleteProductionItem,
   onProductionItemChange,
 }: {
   items: ProductionItem[];
+  onAddProductionItem: () => string;
+  onDeleteProductionItem: (itemId: string) => void;
   onProductionItemChange: (itemId: string, updates: Partial<ProductionItem>) => void;
 }) {
   const [selectedItemId, setSelectedItemId] = useState("");
+  const [pendingDeleteItemId, setPendingDeleteItemId] = useState("");
+  const [productionView, setProductionView] = useState<"未完了" | "全て">("未完了");
+  const visibleItems =
+    productionView === "未完了" ? items.filter((item) => item.status !== "納品済") : items;
   const selectedItem = items.find((item) => item.id === selectedItemId);
 
   useEffect(() => {
     if (selectedItemId && !items.some((item) => item.id === selectedItemId)) {
       setSelectedItemId("");
     }
-  }, [items, selectedItemId]);
+    if (pendingDeleteItemId && !items.some((item) => item.id === pendingDeleteItemId)) {
+      setPendingDeleteItemId("");
+    }
+  }, [items, pendingDeleteItemId, selectedItemId]);
+
+  useEffect(() => {
+    if (!pendingDeleteItemId) return;
+    const resetPendingDelete = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".editorDangerZone")) return;
+      setPendingDeleteItemId("");
+    };
+    document.addEventListener("pointerdown", resetPendingDelete);
+    return () => document.removeEventListener("pointerdown", resetPendingDelete);
+  }, [pendingDeleteItemId]);
 
   return (
-    <CompactSection icon={<PackageCheck size={17} />} title="制作物">
+    <CompactSection
+      action={
+        <button
+          aria-label="制作物追加"
+          className="sectionAddButton"
+          onClick={() => setSelectedItemId(onAddProductionItem())}
+          type="button"
+        >
+          <Plus size={16} />
+        </button>
+      }
+      icon={<PackageCheck size={17} />}
+      title="制作物"
+    >
+      <div className="productionViewTabs">
+        {(["未完了", "全て"] as const).map((view) => (
+          <button
+            className={productionView === view ? "active" : ""}
+            key={view}
+            onClick={() => setProductionView(view)}
+            type="button"
+          >
+            {view}
+            <span>{view === "未完了" ? items.filter((item) => item.status !== "納品済").length : items.length}</span>
+          </button>
+        ))}
+      </div>
       <div className="productionRows">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const isSelected = selectedItem?.id === item.id;
           const late = isProductionLate(item);
           return (
             <div className="productionEntry" key={item.id}>
-              <button
-                className={`productionRow ${isSelected ? "active" : ""} ${late ? "late" : ""}`}
-                onClick={() => setSelectedItemId((current) => (current === item.id ? "" : item.id))}
-                type="button"
-              >
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>
-                    {item.vendor} / {formatDate(item.dueDate)}
-                  </span>
-                  {late && <em>{Math.abs(daysUntil(item.dueDate))}日遅れ</em>}
+              <div className={`productionRow ${isSelected ? "active" : ""} ${late ? "late" : ""}`}>
+                <button
+                  className="productionRowMain"
+                  onClick={() => setSelectedItemId((current) => (current === item.id ? "" : item.id))}
+                  type="button"
+                >
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.vendor} / {formatDate(item.dueDate)}
+                    </span>
+                    {late && <em>{Math.abs(daysUntil(item.dueDate))}日遅れ</em>}
+                  </div>
+                </button>
+                <div className="productionRowActions">
+                  <StatusPill value={item.status} />
                 </div>
-                <StatusPill value={item.status} />
-              </button>
+              </div>
 
               {isSelected && (
-                <ProductionEditor item={item} onProductionItemChange={onProductionItemChange} />
+                <ProductionEditor
+                  item={item}
+                  pendingDelete={pendingDeleteItemId === item.id}
+                  onDelete={() => {
+                    if (pendingDeleteItemId !== item.id) {
+                      setPendingDeleteItemId(item.id);
+                      return;
+                    }
+                    onDeleteProductionItem(item.id);
+                    setPendingDeleteItemId("");
+                  }}
+                  onProductionItemChange={(itemId, updates) => {
+                    setPendingDeleteItemId("");
+                    onProductionItemChange(itemId, updates);
+                  }}
+                />
               )}
             </div>
           );
         })}
+        {visibleItems.length === 0 && <div className="miniEmpty">表示する制作物はありません</div>}
       </div>
     </CompactSection>
   );
@@ -2387,9 +4109,13 @@ function ProductionManager({
 
 function ProductionEditor({
   item,
+  pendingDelete,
+  onDelete,
   onProductionItemChange,
 }: {
   item: ProductionItem;
+  pendingDelete: boolean;
+  onDelete: () => void;
   onProductionItemChange: (itemId: string, updates: Partial<ProductionItem>) => void;
 }) {
   return (
@@ -2417,6 +4143,13 @@ function ProductionEditor({
         <input
           value={item.vendor}
           onChange={(event) => onProductionItemChange(item.id, { vendor: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>担当デザイナー</span>
+        <input
+          value={item.designer ?? ""}
+          onChange={(event) => onProductionItemChange(item.id, { designer: event.target.value })}
         />
       </label>
       <label>
@@ -2448,16 +4181,45 @@ function ProductionEditor({
           onChange={(event) => onProductionItemChange(item.id, { fileUrl: event.target.value })}
         />
       </label>
+      <label className="wide">
+        <span>メモ</span>
+        <textarea
+          value={item.memo ?? ""}
+          onChange={(event) => onProductionItemChange(item.id, { memo: event.target.value })}
+        />
+      </label>
+      <div className="editorDangerZone">
+        {item.fileUrl?.trim() && (
+          <button
+            className="editorOpenButton"
+            onClick={() => window.open(item.fileUrl, "_blank", "noopener,noreferrer")}
+            type="button"
+          >
+            開く
+          </button>
+        )}
+        <button className={pendingDelete ? "confirm" : ""} onClick={onDelete} type="button">
+          {pendingDelete ? "もう一度押すと削除" : "削除"}
+        </button>
+      </div>
     </div>
   );
 }
 
 function RunScheduleManager({
   project,
+  runScheduleTemplates,
+  selectedTemplateId,
   onScheduleItemsChange,
+  onSelectedTemplateChange,
+  onTemplateSave,
 }: {
   project: LiveProject;
+  runScheduleTemplates: RunScheduleTemplateSet[];
+  selectedTemplateId: string;
   onScheduleItemsChange: (scheduleItems: RunScheduleItem[]) => void;
+  onSelectedTemplateChange: (templateId: string) => void;
+  onTemplateSave: (template: RunScheduleTemplateSet) => void;
 }) {
   const scheduleItems = useMemo(
     () =>
@@ -2467,14 +4229,34 @@ function RunScheduleManager({
     [project.eventDate, project.id, project.liveType, project.manager, project.scheduleItems],
   );
   const [activeDay, setActiveDay] = useState<RunScheduleDay>("当日");
+  const [ownerKindFilter, setOwnerKindFilter] = useState<RunScheduleOwnerFilter>("全て");
+  const selectedTemplate =
+    runScheduleTemplates.find((template) => template.id === selectedTemplateId) ?? runScheduleTemplates[0];
+  const [isRunTemplateEditorOpen, setIsRunTemplateEditorOpen] = useState(false);
+  const [runTemplateDraft, setRunTemplateDraft] = useState<RunScheduleTemplateSet>(() =>
+    cloneRunScheduleTemplateSet(selectedTemplate ?? createDefaultRunScheduleTemplateSet()),
+  );
+  const [isRunTemplatePreviewOpen, setIsRunTemplatePreviewOpen] = useState(false);
+  const [runTemplateScrollHint, setRunTemplateScrollHint] = useState({
+    top: false,
+    bottom: false,
+    left: false,
+    right: false,
+  });
+  const runTemplateRowsRef = useRef<HTMLDivElement | null>(null);
   const [newItem, setNewItem] = useState({
     time: "10:00",
     title: "",
+    ownerKind: "FOCスタッフ" as RunScheduleOwnerKind,
     owner: project.manager,
     place: "",
     note: "",
   });
-  const visibleItems = scheduleItems.filter((item) => item.day === activeDay);
+  const filteredScheduleItems =
+    ownerKindFilter === "全て"
+      ? scheduleItems
+      : scheduleItems.filter((item) => getRunScheduleOwnerKind(item) === ownerKindFilter);
+  const visibleItems = filteredScheduleItems.filter((item) => item.day === activeDay);
 
   useEffect(() => {
     setNewItem((current) => ({
@@ -2482,6 +4264,35 @@ function RunScheduleManager({
       owner: project.manager,
     }));
   }, [project.manager]);
+
+  const updateRunTemplateScrollHint = () => {
+    const element = runTemplateRowsRef.current;
+    if (!element) return;
+    const next = {
+      top: element.scrollTop > 2,
+      bottom: element.scrollTop + element.clientHeight < element.scrollHeight - 2,
+      left: element.scrollLeft > 2,
+      right: element.scrollLeft + element.clientWidth < element.scrollWidth - 2,
+    };
+    setRunTemplateScrollHint((current) =>
+      current.top === next.top &&
+      current.bottom === next.bottom &&
+      current.left === next.left &&
+      current.right === next.right
+        ? current
+        : next,
+    );
+  };
+
+  useEffect(() => {
+    if (!isRunTemplateEditorOpen) return;
+    const frame = window.requestAnimationFrame(updateRunTemplateScrollHint);
+    window.addEventListener("resize", updateRunTemplateScrollHint);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateRunTemplateScrollHint);
+    };
+  }, [isRunTemplateEditorOpen, runTemplateDraft.items.length]);
 
   const setSchedule = (items: RunScheduleItem[]) => onScheduleItemsChange(sortRunSchedule(items));
   const updateItem = (itemId: string, updates: Partial<RunScheduleItem>) => {
@@ -2498,6 +4309,7 @@ function RunScheduleManager({
         day: activeDay,
         time: newItem.time,
         title,
+        ownerKind: newItem.ownerKind,
         owner: newItem.owner,
         place: newItem.place.trim(),
         note: newItem.note.trim(),
@@ -2508,8 +4320,82 @@ function RunScheduleManager({
   const deleteItem = (itemId: string) => {
     setSchedule(scheduleItems.filter((item) => item.id !== itemId));
   };
+  const openRunTemplateEditor = () => {
+    setRunTemplateDraft(cloneRunScheduleTemplateSet(selectedTemplate ?? createDefaultRunScheduleTemplateSet()));
+    setIsRunTemplateEditorOpen(true);
+  };
+  const startRunTemplateFromCurrent = () => {
+    setRunTemplateDraft({
+      id: `run-template-${crypto.randomUUID()}`,
+      name: `${project.liveType}進行表`,
+      liveType: project.liveType,
+      items: scheduleItems.map(({ id: _id, ...item }) => item),
+    });
+    setIsRunTemplateEditorOpen(true);
+  };
+  const updateRunTemplateDraftItem = (itemIndex: number, updates: Partial<RunScheduleTemplateItem>) => {
+    setRunTemplateDraft((current) => ({
+      ...current,
+      items: current.items.map((item, index) => (index === itemIndex ? { ...item, ...updates } : item)),
+    }));
+  };
+  const addRunTemplateDraftItem = () => {
+    setRunTemplateDraft((current) => ({
+      ...current,
+      items: [
+        ...current.items,
+        {
+          day: activeDay,
+          time: "10:00",
+          title: "",
+          ownerKind: "FOCスタッフ",
+          owner: project.manager,
+          place: "",
+          note: "",
+        },
+      ],
+    }));
+  };
+  const deleteRunTemplateDraftItem = (itemIndex: number) => {
+    setRunTemplateDraft((current) => ({
+      ...current,
+      items: current.items.length <= 1 ? current.items : current.items.filter((_, index) => index !== itemIndex),
+    }));
+  };
+  const saveRunTemplateDraft = () => {
+    const name = runTemplateDraft.name.trim();
+    const items = runTemplateDraft.items
+      .map((item) => ({
+        ...item,
+        title: item.title.trim(),
+        place: item.place.trim(),
+        note: item.note?.trim() || "",
+      }))
+      .filter((item) => item.title);
+    if (!name || items.length === 0) return;
+    const savedTemplate = {
+      ...runTemplateDraft,
+      name,
+      items: sortRunSchedule(items.map((item, index) => ({ ...item, id: `draft-${index}` }))).map(
+        ({ id: _id, ...item }) => item,
+      ),
+    };
+    onTemplateSave(savedTemplate);
+    onSelectedTemplateChange(savedTemplate.id);
+    setIsRunTemplateEditorOpen(false);
+  };
+  const applyRunTemplate = () => {
+    if (!selectedTemplate) return;
+    setIsRunTemplatePreviewOpen(true);
+  };
+  const confirmRunTemplateApply = () => {
+    if (!selectedTemplate) return;
+    setSchedule(buildRunScheduleFromTemplate(project.id, selectedTemplate.items));
+    setIsRunTemplatePreviewOpen(false);
+  };
 
   return (
+    <>
     <CompactSection icon={<CalendarDays size={17} />} title="進行表">
       <div className="runScheduleToolbar">
         <div className="runScheduleTabs">
@@ -2525,6 +4411,36 @@ function RunScheduleManager({
           ))}
         </div>
         <div className="runScheduleActions">
+          <label className="runScheduleFilter runTemplateSelect">
+            <span>テンプレート</span>
+            <select value={selectedTemplateId} onChange={(event) => onSelectedTemplateChange(event.target.value)}>
+              {runScheduleTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button onClick={applyRunTemplate} type="button">
+            <CopyPlus size={14} />
+            読込
+          </button>
+          <button onClick={openRunTemplateEditor} type="button">
+            <Pencil size={14} />
+            設定
+          </button>
+          <label className="runScheduleFilter">
+            <span>担当区分</span>
+            <select
+              value={ownerKindFilter}
+              onChange={(event) => setOwnerKindFilter(event.target.value as RunScheduleOwnerFilter)}
+            >
+              <option>全て</option>
+              {runScheduleOwnerKinds.map((kind) => (
+                <option key={kind}>{kind}</option>
+              ))}
+            </select>
+          </label>
           <button
             onClick={() => window.alert("Slack連携は今後の実装想定です。")}
             type="button"
@@ -2534,7 +4450,15 @@ function RunScheduleManager({
           </button>
           <button onClick={() => printRunSchedule(project, scheduleItems)} type="button">
             <Printer size={14} />
-            PDF
+            全体PDF
+          </button>
+          <button
+            disabled={ownerKindFilter === "全て"}
+            onClick={() => printRunSchedule(project, filteredScheduleItems, ownerKindFilter)}
+            type="button"
+          >
+            <Printer size={14} />
+            表示中PDF
           </button>
         </div>
       </div>
@@ -2558,6 +4482,18 @@ function RunScheduleManager({
               value={item.title}
               onChange={(event) => updateItem(item.id, { title: event.target.value })}
             />
+            <select
+              aria-label="担当区分"
+              className={`ownerKindSelect ${ownerKindClass(getRunScheduleOwnerKind(item))}`}
+              value={getRunScheduleOwnerKind(item)}
+              onChange={(event) =>
+                updateItem(item.id, { ownerKind: event.target.value as RunScheduleOwnerKind })
+              }
+            >
+              {runScheduleOwnerKinds.map((kind) => (
+                <option key={kind}>{kind}</option>
+              ))}
+            </select>
             <select
               aria-label="担当"
               value={item.owner}
@@ -2606,6 +4542,18 @@ function RunScheduleManager({
           onChange={(event) => setNewItem({ ...newItem, title: event.target.value })}
         />
         <select
+          aria-label="追加担当区分"
+          className={`ownerKindSelect ${ownerKindClass(newItem.ownerKind)}`}
+          value={newItem.ownerKind}
+          onChange={(event) =>
+            setNewItem({ ...newItem, ownerKind: event.target.value as RunScheduleOwnerKind })
+          }
+        >
+          {runScheduleOwnerKinds.map((kind) => (
+            <option key={kind}>{kind}</option>
+          ))}
+        </select>
+        <select
           aria-label="追加担当"
           value={newItem.owner}
           onChange={(event) => setNewItem({ ...newItem, owner: event.target.value })}
@@ -2626,9 +4574,246 @@ function RunScheduleManager({
           value={newItem.note}
           onChange={(event) => setNewItem({ ...newItem, note: event.target.value })}
         />
-        <button type="submit">追加</button>
+        <button aria-label="追加" type="submit">
+          <Plus size={17} />
+        </button>
       </form>
     </CompactSection>
+    {isRunTemplateEditorOpen && (
+      <aside className="runTemplateEditor">
+        <div className="drawerHeader templateHeader">
+          <div>
+            <h2>進行表テンプレート</h2>
+            <span>前日・当日の流れをテンプレートとして登録します</span>
+          </div>
+          <button className="iconButton" onClick={() => setIsRunTemplateEditorOpen(false)} type="button">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="templateTop">
+          <label>
+            <span>編集するテンプレート</span>
+            <select
+              value={runTemplateDraft.id}
+              onChange={(event) => {
+                const template = runScheduleTemplates.find((item) => item.id === event.target.value);
+                if (template) setRunTemplateDraft(cloneRunScheduleTemplateSet(template));
+              }}
+            >
+              {runScheduleTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="secondaryButton" onClick={startRunTemplateFromCurrent} type="button">
+            <CopyPlus size={15} />
+            現在から作成
+          </button>
+        </div>
+
+        <div className="templateMeta">
+          <label>
+            <span>テンプレート名</span>
+            <input
+              value={runTemplateDraft.name}
+              onChange={(event) => setRunTemplateDraft((current) => ({ ...current, name: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>対象</span>
+            <select
+              value={runTemplateDraft.liveType}
+              onChange={(event) =>
+                setRunTemplateDraft((current) => ({
+                  ...current,
+                  liveType: event.target.value as RunScheduleTemplateSet["liveType"],
+                }))
+              }
+            >
+              <option>共通</option>
+              <option>ワンマン</option>
+              <option>定期公演</option>
+              <option>生誕祭</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="runTemplateRowsShell">
+          {runTemplateScrollHint.top && (
+            <div className="runTemplateScrollHint runTemplateScrollHintTop">
+              <ChevronUp size={15} />
+            </div>
+          )}
+          {runTemplateScrollHint.bottom && (
+            <div className="runTemplateScrollHint runTemplateScrollHintBottom">
+              <ChevronDown size={15} />
+            </div>
+          )}
+          {runTemplateScrollHint.left && (
+            <div className="runTemplateScrollHint runTemplateScrollHintLeft">
+              <ChevronLeft size={15} />
+            </div>
+          )}
+          {runTemplateScrollHint.right && (
+            <div className="runTemplateScrollHint runTemplateScrollHintRight">
+              <ChevronRight size={15} />
+            </div>
+          )}
+          <div className="runTemplateRows" onScroll={updateRunTemplateScrollHint} ref={runTemplateRowsRef}>
+            {(["前日", "当日"] as RunScheduleDay[]).map((day) => {
+              const rows = runTemplateDraft.items
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => item.day === day)
+                .sort((a, b) => a.item.time.localeCompare(b.item.time));
+              return (
+                <section className="runTemplateEditSection" key={day}>
+                  <h3>{day}テンプレート</h3>
+                  <div className="runTemplateColumnLabels">
+                    <span>時刻</span>
+                    <span>内容</span>
+                    <span>担当区分</span>
+                    <span>担当</span>
+                    <span>場所</span>
+                    <span>メモ</span>
+                    <span>削除</span>
+                  </div>
+                  <div className="runTemplateEditTimeline">
+                    {rows.map(({ item, index }) => (
+                      <div className="runTemplateRow" key={`${item.day}-${item.time}-${index}`}>
+                        <select
+                          aria-label="時刻"
+                          value={item.time}
+                          onChange={(event) => updateRunTemplateDraftItem(index, { time: event.target.value })}
+                        >
+                          {fiveMinuteTimes.map((time) => (
+                            <option key={time} value={time}>
+                              {time}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          aria-label="内容"
+                          value={item.title}
+                          onChange={(event) => updateRunTemplateDraftItem(index, { title: event.target.value })}
+                          placeholder="内容"
+                        />
+                        <select
+                          aria-label="担当区分"
+                          className={`ownerKindSelect ${ownerKindClass(getRunScheduleOwnerKind(item))}`}
+                          value={getRunScheduleOwnerKind(item)}
+                          onChange={(event) =>
+                            updateRunTemplateDraftItem(index, { ownerKind: event.target.value as RunScheduleOwnerKind })
+                          }
+                        >
+                          {runScheduleOwnerKinds.map((kind) => (
+                            <option key={kind}>{kind}</option>
+                          ))}
+                        </select>
+                        <select
+                          aria-label="担当"
+                          value={item.owner}
+                          onChange={(event) => updateRunTemplateDraftItem(index, { owner: event.target.value })}
+                        >
+                          {managers.map((manager) => (
+                            <option key={manager}>{manager}</option>
+                          ))}
+                        </select>
+                        <input
+                          aria-label="場所"
+                          value={item.place}
+                          onChange={(event) => updateRunTemplateDraftItem(index, { place: event.target.value })}
+                          placeholder="場所"
+                        />
+                        <input
+                          aria-label="メモ"
+                          value={item.note ?? ""}
+                          onChange={(event) => updateRunTemplateDraftItem(index, { note: event.target.value })}
+                          placeholder="メモ"
+                        />
+                        <button
+                          aria-label="削除"
+                          className="scheduleDeleteButton"
+                          disabled={runTemplateDraft.items.length <= 1}
+                          onClick={() => deleteRunTemplateDraftItem(index)}
+                          type="button"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {rows.length === 0 && <div className="runTemplatePreviewEmpty">予定はありません</div>}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="templateFooter">
+          <button className="secondaryButton" onClick={addRunTemplateDraftItem} type="button">
+            <Plus size={15} />
+            {activeDay}に行を追加
+          </button>
+          <button className="primaryButton" onClick={saveRunTemplateDraft} type="button">
+            保存
+          </button>
+        </div>
+      </aside>
+    )}
+    {isRunTemplatePreviewOpen && selectedTemplate && (
+      <aside className="runTemplatePreview">
+        <div className="drawerHeader templateHeader">
+          <div>
+            <h2>{selectedTemplate.name}を読み込み</h2>
+            <span>現在の進行表は、この内容で置き換わります</span>
+          </div>
+          <button className="iconButton" onClick={() => setIsRunTemplatePreviewOpen(false)} type="button">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="runTemplatePreviewRows">
+          {(["前日", "当日"] as RunScheduleDay[]).map((day) => {
+            const rows = sortRunSchedule(
+              selectedTemplate.items
+                .map((item, index) => ({ ...item, id: `preview-${index}` }))
+                .filter((item) => item.day === day),
+            );
+            return (
+              <section className="runTemplatePreviewSection" key={day}>
+                <h3>{day}テンプレート</h3>
+                <div className="runTemplatePreviewTimeline">
+                  {rows.map((item) => (
+                    <div className={`runTemplatePreviewRow ${day === "前日" ? "eve" : "day"}`} key={item.id}>
+                      <strong className="previewTime">{item.time}</strong>
+                      <b>{item.title}</b>
+                      <span className={`previewOwnerKind ${ownerKindClass(getRunScheduleOwnerKind(item))}`}>
+                        {getRunScheduleOwnerKind(item)}
+                      </span>
+                      <small>{item.owner}</small>
+                      <small>{item.place || "場所未設定"}</small>
+                      <small>{item.note || "メモ"}</small>
+                    </div>
+                  ))}
+                  {rows.length === 0 && <div className="runTemplatePreviewEmpty">予定はありません</div>}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+        <div className="templateFooter previewFooter">
+          <button className="secondaryButton" onClick={() => setIsRunTemplatePreviewOpen(false)} type="button">
+            戻る
+          </button>
+          <button className="primaryButton" onClick={confirmRunTemplateApply} type="button">
+            決定
+          </button>
+        </div>
+      </aside>
+    )}
+    </>
   );
 }
 
@@ -2773,17 +4958,20 @@ function CalendarPanel({
   onMoveTask: (liveId: string, taskId: string, date: string) => void;
   onSelectItem: (item: CalendarItem) => void;
 }) {
-  const [selectedDate, setSelectedDate] = useState(anchorDate);
-  const [visibleMonth, setVisibleMonth] = useState(firstDayOfMonth(anchorDate));
+  const safeAnchorDate = isIsoDate(anchorDate) ? anchorDate : toIsoDate(today);
+  const [selectedDate, setSelectedDate] = useState(safeAnchorDate);
+  const [visibleMonth, setVisibleMonth] = useState(firstDayOfMonth(safeAnchorDate));
   const [dragTask, setDragTask] = useState<DragTask | null>(null);
   const [dropDate, setDropDate] = useState<string | null>(null);
+  const [agendaScrollHint, setAgendaScrollHint] = useState({ top: false, bottom: false });
+  const agendaListRef = useRef<HTMLDivElement | null>(null);
   const monthSwitchRef = useRef(0);
   useEffect(() => {
-    setVisibleMonth(firstDayOfMonth(anchorDate));
-    setSelectedDate(anchorDate);
-  }, [anchorDate]);
+    setVisibleMonth(firstDayOfMonth(safeAnchorDate));
+    setSelectedDate(safeAnchorDate);
+  }, [safeAnchorDate]);
 
-  const anchor = toDate(visibleMonth);
+  const anchor = toDate(isIsoDate(visibleMonth) ? visibleMonth : firstDayOfMonth(safeAnchorDate));
   const year = anchor.getFullYear();
   const month = anchor.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -2808,6 +4996,23 @@ function CalendarPanel({
   const selectedItems = items
     .filter((item) => item.date === selectedDate)
     .sort((a, b) => `${a.time}${a.title}`.localeCompare(`${b.time}${b.title}`));
+  const updateAgendaScrollHint = () => {
+    const element = agendaListRef.current;
+    if (!element) return;
+    const top = element.scrollTop > 4;
+    const bottom = element.scrollTop + element.clientHeight < element.scrollHeight - 4;
+    setAgendaScrollHint((current) =>
+      current.top === top && current.bottom === bottom ? current : { top, bottom },
+    );
+  };
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(updateAgendaScrollHint);
+    window.addEventListener("resize", updateAgendaScrollHint);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateAgendaScrollHint);
+    };
+  }, [selectedDate, selectedItems.length, visibleMonth]);
   const moveMonth = (offset: number) => {
     const next = new Date(year, month + offset, 1);
     const nextMonth = toIsoDate(next);
@@ -2885,6 +5090,7 @@ function CalendarPanel({
         {cells.map((cell) => {
           const dayItems = items.filter((item) => item.date === cell.date);
           const groups = summarizeCalendarDay(dayItems);
+          const hasHoliday = dayItems.some((item) => item.kind === "祝日");
           const isMarkerSelected = Boolean(cell.date && cell.date === selectedMarkerDate);
           const dayOfWeek = toDate(cell.date).getDay();
           return (
@@ -2895,6 +5101,8 @@ function CalendarPanel({
                 isMarkerSelected ? "dueSelected" : ""
               } ${cell.inMonth ? "" : "otherMonth"} ${
                 dayOfWeek === 0 ? "sunday" : dayOfWeek === 6 ? "saturday" : ""
+              } ${
+                hasHoliday ? "holiday" : ""
               } ${
                 dragTask && dropDate === cell.date ? "dropTarget" : ""
               }`}
@@ -2939,39 +5147,51 @@ function CalendarPanel({
           <strong>{formatDate(selectedDate)}</strong>
           <span>{selectedItems.length}件</span>
         </div>
-        <div className="agendaList">
-          {selectedItems.map((item) => (
-            <button
-              className={`agendaItem ${item.taskId ? "linkedTask draggableTask" : ""}`}
-              draggable={Boolean(item.taskId)}
-              key={item.id}
-              onClick={() => onSelectItem(item)}
-              onDragEnd={() => {
-                setDragTask(null);
-                setDropDate(null);
-              }}
-              onDragStart={(event) => {
-                if (!item.taskId) return;
-                const task = { liveId: item.liveId, taskId: item.taskId, title: item.title };
-                setDragTask(task);
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", item.title);
-              }}
-              type="button"
-            >
-              <StatusPill value={item.kind} />
-              <div>
-                <strong>{item.title}</strong>
-                <span>
-                  {item.time ? `${item.time} / ` : ""}
-                  {item.liveTitle}
-                </span>
+        <div className="agendaListWrap">
+          {agendaScrollHint.top && (
+            <div className="groupScrollHint groupScrollHintTop">
+              <ChevronUp size={14} />
+            </div>
+          )}
+          <div className="agendaList" onScroll={updateAgendaScrollHint} ref={agendaListRef}>
+            {selectedItems.map((item) => (
+              <button
+                className={`agendaItem ${item.taskId ? "linkedTask draggableTask" : ""}`}
+                draggable={Boolean(item.taskId)}
+                key={item.id}
+                onClick={() => onSelectItem(item)}
+                onDragEnd={() => {
+                  setDragTask(null);
+                  setDropDate(null);
+                }}
+                onDragStart={(event) => {
+                  if (!item.taskId || !item.liveId) return;
+                  const task = { liveId: item.liveId, taskId: item.taskId, title: item.title };
+                  setDragTask(task);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", item.title);
+                }}
+                type="button"
+              >
+                <StatusPill value={item.kind} />
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>
+                    {item.time ? `${item.time} / ` : ""}
+                    {item.liveTitle}
+                  </span>
+                </div>
+              </button>
+            ))}
+            {selectedItems.length === 0 && (
+              <div className="agendaEmpty">
+                <span>この日の予定はありません</span>
               </div>
-            </button>
-          ))}
-          {selectedItems.length === 0 && (
-            <div className="agendaEmpty">
-              <span>この日の予定はありません</span>
+            )}
+          </div>
+          {agendaScrollHint.bottom && (
+            <div className="groupScrollHint groupScrollHintBottom">
+              <ChevronDown size={14} />
             </div>
           )}
         </div>
@@ -2980,6 +5200,8 @@ function CalendarPanel({
         {[
           ["live", "ライブ"],
           ["ticket", "チケット"],
+          ["external", "Googleカレンダー"],
+          ["holiday", "祝日"],
           ["task", "タスク"],
           ["prep", "ゲネ/撮影"],
         ].map(([className, label]) => (
@@ -3003,10 +5225,192 @@ function summarizeCalendarDay(items: CalendarItem[]) {
   }, []);
 }
 
+async function loadGoogleCalendarItems(calendarUrl: string, groupName: string): Promise<CalendarItem[]> {
+  const generatedItems = await loadGeneratedCalendarItems(groupName);
+  if (generatedItems.length > 0) return generatedItems;
+
+  const icsUrls = calendarUrlToIcsUrls(calendarUrl);
+  if (icsUrls.length === 0) return [];
+  const calendars = await Promise.all(
+    icsUrls.map(async (icsUrl) => parseIcsCalendar(await fetchCalendarText(icsUrl), groupName, icsUrl)),
+  );
+  const minDate = toDate(addDays(today, -180));
+  const maxDate = toDate(addDays(today, 540));
+  return calendars
+    .flat()
+    .filter((item) => {
+      const date = toDate(item.date);
+      return date >= minDate && date <= maxDate;
+    })
+    .sort((a, b) => `${a.date}${a.time}${a.title}`.localeCompare(`${b.date}${b.time}${b.title}`));
+}
+
+async function loadGeneratedCalendarItems(groupName: string): Promise<CalendarItem[]> {
+  try {
+    const response = await fetch(new URL("calendar-events.json", document.baseURI).toString(), {
+      cache: "no-store",
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as GeneratedCalendarPayload;
+    const calendar = payload.calendars?.find((current) => current.group === groupName);
+    const groupEvents =
+      calendar?.events
+        ?.filter((event) => isIsoDate(event.date))
+        .map((event) => ({
+          id: event.id,
+          date: event.date,
+          time: event.time,
+          title: event.title,
+          liveTitle: event.location || groupName,
+          kind: "カレンダー",
+          readonly: true,
+          sourceUrl: event.sourceUrl,
+        })) ?? [];
+    const holidayEvents =
+      payload.holidays
+        ?.filter((event) => isIsoDate(event.date))
+        .map((event) => ({
+          id: `holiday-${event.id}`,
+          date: event.date,
+          time: event.time,
+          title: event.title,
+          liveTitle: "休み",
+          kind: "祝日",
+          readonly: true,
+          sourceUrl: event.sourceUrl,
+        })) ?? [];
+    return [...groupEvents, ...holidayEvents];
+  } catch {
+    return [];
+  }
+}
+
+function calendarUrlToIcsUrls(calendarUrl: string) {
+  if (calendarUrl.endsWith(".ics")) return [calendarUrl];
+  try {
+    const url = new URL(calendarUrl);
+    const sources = url.searchParams.getAll("src");
+    return sources
+      .map(normalizeCalendarSource)
+      .filter((source): source is string => Boolean(source && !isHolidayCalendarSource(source)))
+      .map((source) => `https://calendar.google.com/calendar/ical/${encodeURIComponent(source)}/public/basic.ics`);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeCalendarSource(source: string) {
+  const decodedSource = decodeURIComponent(source);
+  if (decodedSource.includes("@")) return decodedSource;
+  try {
+    const decodedBase64 = atob(decodedSource);
+    return decodedBase64.includes("@") ? decodedBase64 : decodedSource;
+  } catch {
+    return decodedSource;
+  }
+}
+
+function isHolidayCalendarSource(source: string) {
+  const normalized = source.toLowerCase();
+  return normalized.includes("holiday") || normalized.includes("#holiday");
+}
+
+async function fetchCalendarText(url: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Calendar fetch failed: ${response.status}`);
+    return await response.text();
+  } catch {
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) throw new Error(`Calendar proxy fetch failed: ${response.status}`);
+    return await response.text();
+  }
+}
+
+function parseIcsCalendar(icsText: string, groupName: string, sourceUrl: string): CalendarItem[] {
+  const lines = icsText.replace(/\r?\n[ \t]/g, "").split(/\r?\n/);
+  const events: string[][] = [];
+  let currentEvent: string[] | null = null;
+
+  lines.forEach((line) => {
+    if (line === "BEGIN:VEVENT") {
+      currentEvent = [];
+      return;
+    }
+    if (line === "END:VEVENT") {
+      if (currentEvent) events.push(currentEvent);
+      currentEvent = null;
+      return;
+    }
+    if (currentEvent) currentEvent.push(line);
+  });
+
+  return events.flatMap((eventLines) => {
+    const summary = getIcsValue(eventLines, "SUMMARY");
+    const start = getIcsValue(eventLines, "DTSTART");
+    if (!summary || !start) return [];
+    const uid = getIcsValue(eventLines, "UID") || `${summary}-${start}`;
+    const location = getIcsValue(eventLines, "LOCATION");
+    const parsedStart = parseIcsDateTime(start);
+    if (!parsedStart) return [];
+    const cleanSummary = unescapeIcsText(summary);
+    const cleanLocation = location ? unescapeIcsText(location) : "";
+
+    return [
+      {
+        id: `external-${groupName}-${uid}`,
+        date: parsedStart.date,
+        time: parsedStart.time,
+        title: cleanSummary,
+        liveTitle: cleanLocation || groupName,
+        kind: "カレンダー",
+        readonly: true,
+        sourceUrl,
+      },
+    ];
+  });
+}
+
+function getIcsValue(lines: string[], name: string) {
+  const line = lines.find((currentLine) => currentLine.startsWith(`${name}:`) || currentLine.startsWith(`${name};`));
+  return line?.slice(line.indexOf(":") + 1) ?? "";
+}
+
+function parseIcsDateTime(value: string) {
+  if (/^\d{8}$/.test(value)) {
+    return { date: `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`, time: "" };
+  }
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/);
+  if (!match) return null;
+  if (value.endsWith("Z")) {
+    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5])));
+    return {
+      date: toIsoDate(date),
+      time: `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`,
+    };
+  }
+  return {
+    date: `${match[1]}-${match[2]}-${match[3]}`,
+    time: `${match[4]}:${match[5]}`,
+  };
+}
+
+function unescapeIcsText(value: string) {
+  return value
+    .replace(/\\n/g, " ")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .replace(/\\\\/g, "\\")
+    .trim();
+}
+
 function shortKind(kind: string) {
   if (kind === "チケット") return "券";
   if (kind === "ライブ") return "本";
   if (kind === "タスク") return "タ";
+  if (kind === "カレンダー") return "予";
+  if (kind === "祝日") return "休";
   if (kind === "ゲネ") return "ゲ";
   if (kind === "撮影") return "撮";
   return kind.slice(0, 1);
@@ -3035,10 +5439,12 @@ function InfoList({ items }: { items: Array<[string, string]> }) {
 }
 
 function CompactSection({
+  action,
   icon,
   title,
   children,
 }: {
+  action?: ReactNode;
   icon: ReactNode;
   title: string;
   children: ReactNode;
@@ -3048,6 +5454,7 @@ function CompactSection({
       <div className="compactTitle">
         {icon}
         <h3>{title}</h3>
+        {action && <div className="compactTitleAction">{action}</div>}
       </div>
       <div className="compactList">{children}</div>
     </section>
@@ -3096,8 +5503,16 @@ function DueBadge({ date, done }: { date: string; done: boolean }) {
 
 function StatusPill({ value }: { value: string }) {
   const tone =
-    value === "遅延" || value === "未依頼" || value === "未作成" || value === "未入力"
+    value === "募集中"
+      ? "recruiting"
+      : value === "応募済み"
+        ? "applied"
+        : value === "確定"
+          ? "confirmed"
+    : value === "遅延" || value === "未依頼" || value === "未作成" || value === "未入力"
       ? "danger"
+      : value === "祝日"
+        ? "danger"
       : value === "注意" || value === "制作中" || value === "確認待ち" || value === "作成中" || value === "確認中"
         ? "warn"
         : value === "完了" || value === "納品済" || value === "入稿済" || value === "公開済"
@@ -3211,6 +5626,13 @@ function createManagerIssues(projects: LiveProject[]): ManagerIssue[] {
           priority += 45;
         }
 
+        if (item.status === "未依頼") {
+          tags.push("未依頼");
+          kind ??= "未依頼";
+          detail ||= "制作物が未依頼";
+          priority += 50;
+        }
+
         if (external || item.owner === "外注") {
           tags.push("外注");
           kind ??= "外注";
@@ -3249,6 +5671,7 @@ function managerToneClass(value: ManagerFilter | ManagerIssueKind) {
   if (value === "3日以内") return "tone-soon";
   if (value === "外注") return "tone-external";
   if (value === "確認待ち") return "tone-confirm";
+  if (value === "未依頼") return "tone-missing";
   if (value === "未入力") return "tone-missing";
   return "tone-all";
 }
@@ -3260,6 +5683,8 @@ function isProductionLate(item: ProductionItem) {
 function eventTone(kind: string) {
   if (kind === "ライブ") return "live";
   if (kind === "チケット") return "ticket";
+  if (kind === "カレンダー") return "external";
+  if (kind === "祝日") return "holiday";
   if (kind === "タスク") return "task";
   return "prep";
 }
@@ -3278,7 +5703,8 @@ function defaultRunSchedule(
       day: "前日",
       time: "18:00",
       title: "グッズ・特典物確認",
-      owner: "小林",
+      ownerKind: "FOCスタッフ",
+      owner: "小杉",
       place: "事務所",
       note: "数量と不足物を確認",
     },
@@ -3287,7 +5713,8 @@ function defaultRunSchedule(
       day: "前日",
       time: "19:00",
       title: "衣装・撮影物確認",
-      owner: "佐藤",
+      ownerKind: "FOCスタッフ",
+      owner: "御手洗",
       place: "事務所",
       note: "持ち出し物をまとめる",
     },
@@ -3296,6 +5723,7 @@ function defaultRunSchedule(
       day: "前日",
       time: "20:00",
       title: "集合時間・注意事項共有",
+      ownerKind: "FOCスタッフ",
       owner: manager,
       place: "Slack",
       note: "メンバーとスタッフへ共有",
@@ -3305,6 +5733,7 @@ function defaultRunSchedule(
       day: "当日",
       time: "10:00",
       title: "スタッフ集合",
+      ownerKind: "FOCスタッフ",
       owner: manager,
       place: "会場入口",
       note: "受付・搬入導線を確認",
@@ -3314,7 +5743,8 @@ function defaultRunSchedule(
       day: "当日",
       time: "10:30",
       title: "搬入・受付準備",
-      owner: "外注",
+      ownerKind: "その他",
+      owner: "御手洗",
       place: "会場",
       note: "物販と受付を設営",
     },
@@ -3323,6 +5753,7 @@ function defaultRunSchedule(
       day: "当日",
       time: "13:00",
       title: "リハーサル",
+      ownerKind: "出演者",
       owner: manager,
       place: "ステージ",
       note: "音源・立ち位置確認",
@@ -3332,7 +5763,8 @@ function defaultRunSchedule(
       day: "当日",
       time: "15:30",
       title: "物販準備",
-      owner: "小林",
+      ownerKind: "FOCスタッフ",
+      owner: "小杉",
       place: "物販卓",
       note: "価格表と決済確認",
     },
@@ -3341,6 +5773,7 @@ function defaultRunSchedule(
       day: "当日",
       time: oneManOpening,
       title: "開場",
+      ownerKind: "会場スタッフ",
       owner: manager,
       place: "入口",
       note: "",
@@ -3350,6 +5783,7 @@ function defaultRunSchedule(
       day: "当日",
       time: oneManStart,
       title: "開演",
+      ownerKind: "出演者",
       owner: manager,
       place: "ステージ",
       note: "",
@@ -3359,7 +5793,8 @@ function defaultRunSchedule(
       day: "当日",
       time: "19:00",
       title: "特典会",
-      owner: "佐藤",
+      ownerKind: "チェキスタッフ",
+      owner: "御手洗",
       place: "特典会エリア",
       note: "列整理と撮影導線を確認",
     },
@@ -3368,7 +5803,8 @@ function defaultRunSchedule(
       day: "当日",
       time: "20:30",
       title: "撤収",
-      owner: "外注",
+      ownerKind: "その他",
+      owner: "御手洗",
       place: "会場",
       note: "忘れ物確認",
     },
@@ -3380,35 +5816,72 @@ function sortRunSchedule(items: RunScheduleItem[]) {
   return [...items].sort((a, b) => dayRank[a.day] - dayRank[b.day] || a.time.localeCompare(b.time));
 }
 
-function printRunSchedule(project: LiveProject, scheduleItems: RunScheduleItem[]) {
+function getRunScheduleOwnerKind(item: Pick<RunScheduleItem, "ownerKind">): RunScheduleOwnerKind {
+  if (item.ownerKind === "御社スタッフ") return "その他";
+  if (item.ownerKind === "会場") return "会場スタッフ";
+  return item.ownerKind ?? "FOCスタッフ";
+}
+
+function ownerKindClass(kind: RunScheduleOwnerKind) {
+  const classMap: Record<RunScheduleOwnerKind, string> = {
+    FOCスタッフ: "ownerKind-foc",
+    チェキスタッフ: "ownerKind-cheki",
+    出演者: "ownerKind-cast",
+    会場スタッフ: "ownerKind-venue",
+    その他: "ownerKind-other",
+  };
+  return classMap[kind];
+}
+
+function printRunSchedule(
+  project: LiveProject,
+  scheduleItems: RunScheduleItem[],
+  ownerKindFilter: RunScheduleOwnerFilter = "全て",
+) {
   const printWindow = window.open("", "_blank", "width=960,height=720");
   if (!printWindow) return;
   const sortedItems = sortRunSchedule(scheduleItems);
+  const printLabel = ownerKindFilter === "全て" ? "全体版" : `${ownerKindFilter}版`;
   const html = `<!doctype html>
     <html lang="ja">
       <head>
         <meta charset="utf-8" />
-        <title>${escapeHtml(project.title)} 進行表</title>
+        <title>${escapeHtml(project.title)} 進行表 ${escapeHtml(printLabel)}</title>
         <style>
           * { box-sizing: border-box; }
           body { margin: 0; padding: 28px; color: #111827; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
           h1 { margin: 0; font-size: 24px; }
+          .subtitle { margin-top: 6px; color: #475569; font-size: 14px; font-weight: 800; }
           h2 { margin: 24px 0 8px; font-size: 17px; border-bottom: 2px solid #111827; padding-bottom: 6px; }
           .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
           .meta div { border: 1px solid #d8e0ec; border-radius: 8px; padding: 8px; }
           .meta span { display: block; color: #64748b; font-size: 11px; font-weight: 700; }
           .meta strong { display: block; margin-top: 3px; font-size: 13px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+          table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
           th { background: #f1f5f9; color: #334155; text-align: left; }
           th, td { border: 1px solid #d8e0ec; padding: 8px; vertical-align: top; }
           td.time { width: 68px; font-weight: 800; }
-          td.owner { width: 76px; }
-          td.place { width: 120px; }
+          td.kind { width: 118px; font-weight: 800; white-space: nowrap; }
+          td.kind span { display: inline-block; min-width: 96px; padding: 4px 7px; border: 1px solid #d8e0ec; border-radius: 999px; text-align: center; white-space: nowrap; }
+          td.kind .ownerKind-foc { border-color: #99f6e4; background: #ecfdf5; color: #0f766e; }
+          td.kind .ownerKind-cheki { border-color: #bfdbfe; background: #eff6ff; color: #2563eb; }
+          td.kind .ownerKind-cast { border-color: #ddd6fe; background: #f5f3ff; color: #6d28d9; }
+          td.kind .ownerKind-venue { border-color: #bae6fd; background: #f0f9ff; color: #0369a1; }
+          td.kind .ownerKind-other { border-color: #e2e8f0; background: #f8fafc; color: #475569; }
+          .col-time { width: 56px; }
+          .col-title { width: 138px; }
+          .col-kind { width: 112px; }
+          .col-owner { width: 64px; }
+          .col-place { width: 92px; }
+          .col-note { width: auto; }
+          td.owner { width: 64px; }
+          td.place { width: 92px; }
           @media print { body { padding: 18mm; } button { display: none; } }
         </style>
       </head>
       <body>
         <h1>${escapeHtml(project.title)} 進行表</h1>
+        <div class="subtitle">${escapeHtml(printLabel)}</div>
         <div class="meta">
           <div><span>グループ</span><strong>${escapeHtml(project.group)}</strong></div>
           <div><span>開催日</span><strong>${escapeHtml(formatFullDate(project.eventDate))}</strong></div>
@@ -3431,8 +5904,16 @@ function renderSchedulePrintSection(day: RunScheduleDay, eventDate: string, sche
   return `
     <h2>${escapeHtml(day)} ${escapeHtml(formatFullDate(date))}</h2>
     <table>
+      <colgroup>
+        <col class="col-time" />
+        <col class="col-title" />
+        <col class="col-kind" />
+        <col class="col-owner" />
+        <col class="col-place" />
+        <col class="col-note" />
+      </colgroup>
       <thead>
-        <tr><th>時刻</th><th>内容</th><th>担当</th><th>場所</th><th>メモ</th></tr>
+        <tr><th>時刻</th><th>内容</th><th>担当区分</th><th>担当</th><th>場所</th><th>メモ</th></tr>
       </thead>
       <tbody>
         ${
@@ -3442,13 +5923,16 @@ function renderSchedulePrintSection(day: RunScheduleDay, eventDate: string, sche
                   (item) => `<tr>
                     <td class="time">${escapeHtml(item.time)}</td>
                     <td>${escapeHtml(item.title)}</td>
+                    <td class="kind"><span class="${escapeHtml(ownerKindClass(getRunScheduleOwnerKind(item)))}">${escapeHtml(
+                      getRunScheduleOwnerKind(item),
+                    )}</span></td>
                     <td class="owner">${escapeHtml(item.owner)}</td>
                     <td class="place">${escapeHtml(item.place)}</td>
                     <td>${escapeHtml(item.note ?? "")}</td>
                   </tr>`,
                 )
                 .join("")
-            : `<tr><td colspan="5">予定はありません</td></tr>`
+            : `<tr><td colspan="6">予定はありません</td></tr>`
         }
       </tbody>
     </table>`;
@@ -3463,19 +5947,42 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function generateTasks(projectId: string, eventDate: string): Task[] {
+function generateTasks(projectId: string, eventDate: string, templateItems?: TaskTemplateItem[]): Task[] {
   const date = toDate(eventDate);
-  return taskTemplates.map((template, index) => ({
-    id: `${projectId}-task-${index}`,
-    phase: template.phase,
-    title: template.title,
-    dueDate: addDays(date, template.offset),
-    owner: template.owner,
-    priority: template.priority,
-    status: "未着手",
-    memo: template.memo,
-    subtasks: buildSubtasks(`${projectId}-task-${index}`, template.title),
-  }));
+  const items =
+    templateItems ??
+    taskTemplates.map((template, index) => ({
+      id: `default-template-item-${index}`,
+      phase: template.phase,
+      title: template.title,
+      offset: template.offset,
+      owner: template.owner,
+      priority: template.priority,
+      memo: template.memo,
+      subtasks: subtaskTemplates[template.title] ?? [],
+    }));
+
+  return items.map((template, index) => {
+    const taskId = `${projectId}-task-${index}`;
+    return {
+      id: taskId,
+      phase: template.phase,
+      title: template.title,
+      dueDate: addDays(date, template.offset),
+      owner: template.owner,
+      priority: template.priority,
+      status: "未着手",
+      memo: template.memo,
+      subtasks:
+        template.subtasks.length > 0
+          ? template.subtasks.map((title, subtaskIndex) => ({
+              id: `${taskId}-subtask-${subtaskIndex}`,
+              title,
+              done: false,
+            }))
+          : buildSubtasks(taskId, template.title),
+    };
+  });
 }
 
 function applyStatuses(tasks: Task[], statuses: Record<string, TaskStatus>) {
@@ -3598,26 +6105,32 @@ function defaultProductionItems(eventDate: string): ProductionItem[] {
     {
       id: `item-${crypto.randomUUID()}`,
       name: "告知画像",
-      owner: "佐藤",
+      owner: "御手洗",
+      designer: "",
       vendor: "未設定",
       dueDate: addDays(date, -45),
       status: "未依頼",
+      memo: "",
     },
     {
       id: `item-${crypto.randomUUID()}`,
       name: "ブロマイド",
-      owner: "高橋",
+      owner: "鍋島",
+      designer: "",
       vendor: "未設定",
       dueDate: addDays(date, -20),
       status: "未依頼",
+      memo: "",
     },
     {
       id: `item-${crypto.randomUUID()}`,
       name: "VIP用ピクチャチケット",
-      owner: "小林",
+      owner: "小杉",
+      designer: "",
       vendor: "社内",
       dueDate: addDays(date, -7),
       status: "未依頼",
+      memo: "",
     },
   ];
 }
@@ -3629,7 +6142,7 @@ function parseQuickTask(text: string, projectEventDate: string) {
       phase: "イベント" as Phase,
       title: text,
       dueDate: addDays(today, 1),
-      owner: "田中",
+      owner: "小杉",
       priority: "通常" as Priority,
       memo: "",
     };
@@ -3662,9 +6175,9 @@ function inferPhase(title: string): Phase {
 
 function inferOwner(title: string) {
   if (title.includes("画像") || title.includes("グッズ") || title.includes("衣装")) return "外注";
-  if (title.includes("セトリ") || title.includes("撮影")) return "高橋";
-  if (title.includes("チケット")) return "小林";
-  return "田中";
+  if (title.includes("セトリ") || title.includes("撮影")) return "鍋島";
+  if (title.includes("チケット")) return "小杉";
+  return "小杉";
 }
 
 function inferPriority(title: string): Priority {
@@ -3680,6 +6193,24 @@ function matchesTaskView(task: Task, view: TaskView) {
 
 function taskViewFromStatus(status: TaskStatus): TaskView {
   return status === "完了" ? "完了済み" : status;
+}
+
+function getTaskRole(task: Pick<Task, "owner" | "phase" | "title">): Exclude<TaskRoleFilter, "全ロール"> {
+  if (task.phase === "チケット" || task.title.includes("チケット")) return "チケット";
+  if (task.phase === "当日" || task.title.includes("当日") || task.title.includes("バイト")) return "当日運営";
+  if (task.owner === "外注") return "制作・外注";
+  if (
+    task.phase === "制作物" ||
+    task.phase === "衣装" ||
+    task.title.includes("デザイン") ||
+    task.title.includes("画像") ||
+    task.title.includes("グッズ") ||
+    task.title.includes("ブロマイド") ||
+    task.title.includes("衣装")
+  ) {
+    return "デザイナー";
+  }
+  return "マネージャー";
 }
 
 function completion(tasks: Array<Pick<Task, "status">>) {
@@ -3717,6 +6248,10 @@ function firstDayOfMonth(value: string) {
 function toDate(value: string) {
   const [year, month, day] = value.slice(0, 10).split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function isIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(toDate(value).getTime());
 }
 
 function addDays(date: Date, days: number) {

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc && vite build",
+    "generate:calendar": "node scripts/generate-calendar-events.mjs",
+    "build": "npm run generate:calendar && tsc && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

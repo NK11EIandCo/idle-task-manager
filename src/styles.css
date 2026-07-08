@@ -47,22 +47,28 @@ button {
 }
 
 .app {
+  position: relative;
   height: 100vh;
-  padding: 18px;
+  padding: 10px 14px;
   overflow: hidden;
 }
 
 .topBar {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 14px;
-  margin-bottom: 14px;
+  width: min(300px, calc(100vw - 28px));
+  margin-bottom: 0;
 }
 
 .modeSwitch {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(70px, 1fr));
+  grid-template-columns: repeat(3, minmax(70px, 1fr));
   gap: 5px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -72,7 +78,7 @@ button {
 
 .modeSwitch button {
   min-height: 34px;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -141,15 +147,43 @@ button {
   width: 100%;
 }
 
+.secondaryButton,
+.templateButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #93c5fd;
+  border-radius: 9px;
+  background: #ffffff;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.secondaryButton {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .groupPage {
   display: grid;
   gap: 10px;
 }
 
 .managerPage {
-  height: calc(100vh - 90px);
+  height: calc(100vh - 20px);
   min-height: 0;
   overflow: hidden;
+  padding-top: 48px;
 }
 
 .mainPanel,
@@ -170,7 +204,7 @@ button {
     minmax(280px, 340px);
   gap: 14px;
   align-items: stretch;
-  height: calc(100vh - 90px);
+  height: calc(100vh - 20px);
   min-height: 0;
   overflow: hidden;
 }
@@ -184,8 +218,6 @@ button {
   min-height: 0;
 }
 
-.liveRail,
-.calendarColumn,
 .taskColumn,
 .actionColumn {
   overflow: auto;
@@ -545,8 +577,41 @@ button {
 .calendarColumn,
 .actionColumn {
   display: grid;
-  align-content: start;
   gap: 12px;
+}
+
+.liveRail {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  padding-top: 48px;
+  overflow: hidden;
+  align-content: stretch;
+}
+
+.liveRail > .sidePanel {
+  min-height: 0;
+}
+
+.liveRail > .sidePanel:last-child {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.calendarColumn {
+  height: 100%;
+  overflow: hidden;
+  align-content: stretch;
+}
+
+.calendarColumn > .sidePanel {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.actionColumn {
+  align-content: start;
 }
 
 .mainPanel,
@@ -562,6 +627,17 @@ button {
   margin-bottom: 12px;
 }
 
+.taskPanelHead {
+  align-items: start;
+}
+
+.taskHeaderStack {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  justify-items: end;
+}
+
 .panelHead h2,
 .panelTitle h2,
 .drawerHeader h2 {
@@ -574,7 +650,8 @@ button {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  min-width: 240px;
+  width: 100%;
+  min-width: 318px;
 }
 
 .taskViews button {
@@ -617,6 +694,11 @@ button {
   justify-content: flex-end;
   gap: 7px;
   min-width: 0;
+  width: 100%;
+}
+
+.taskControls .templateButton {
+  flex: 0 0 auto;
 }
 
 .ownerSelect {
@@ -628,6 +710,11 @@ button {
   border: 1px solid #93c5fd;
   border-radius: 9px;
   background: #ffffff;
+}
+
+.ownerSelect.roleSelect {
+  flex-basis: 118px;
+  border-color: #c4b5fd;
 }
 
 .ownerSelect select {
@@ -648,6 +735,10 @@ button {
   right: 8px;
   color: var(--blue);
   pointer-events: none;
+}
+
+.ownerSelect.roleSelect svg {
+  color: #7c3aed;
 }
 
 .quickAdd,
@@ -993,6 +1084,7 @@ button {
 
 .groupListWrap {
   position: relative;
+  min-height: 0;
 }
 
 .groupList {
@@ -1000,6 +1092,7 @@ button {
   gap: 6px;
   max-height: 276px;
   overflow: auto;
+  overscroll-behavior: contain;
   padding-right: 0;
   scrollbar-width: none;
 }
@@ -1089,6 +1182,148 @@ button {
   color: var(--orange);
 }
 
+.groupPanelTitle {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.groupPanelTitle > div:first-child {
+  min-width: 0;
+}
+
+.groupHeaderActions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.groupHeaderActions button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.groupHeaderActions button svg {
+  flex: 0 0 auto;
+}
+
+.groupHeaderActions button.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.groupEditor {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.groupEditorForm {
+  display: grid;
+  gap: 7px;
+}
+
+.groupEditorForm label {
+  display: grid;
+  gap: 4px;
+}
+
+.groupEditorForm span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.groupEditorForm input,
+.groupEditorForm select {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.groupPhotoDrop {
+  position: relative;
+  display: grid;
+  min-height: 84px;
+  place-items: center;
+  gap: 5px;
+  padding: 10px;
+  border: 1px dashed #93c5fd;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: var(--sub);
+  cursor: pointer;
+  text-align: center;
+}
+
+.groupPhotoDrop:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.groupPhotoDrop img {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  object-fit: cover;
+  background: #ffffff;
+}
+
+.groupPhotoDrop small {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.groupPhotoDrop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.groupEditorNotice {
+  margin: 0;
+  padding: 8px 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.groupEditorHint {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .searchBox {
   padding: 0 12px;
   margin-bottom: 8px;
@@ -1137,6 +1372,23 @@ button {
 .liveList {
   display: grid;
   gap: 8px;
+  align-content: start;
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.liveListWrap {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.liveList::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .miniEmpty {
@@ -1150,10 +1402,15 @@ button {
   font-weight: 800;
 }
 
+.liveEmptyState {
+  min-height: 180px;
+}
+
 .liveCard {
   display: grid;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 94px;
   padding: 11px;
   border: 1px solid var(--line-soft);
@@ -1168,29 +1425,39 @@ button {
   background: #f0fdfa;
 }
 
+.externalLiveCard {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.liveCard > div:first-child {
+  min-width: 0;
+}
+
 .liveCard strong {
   display: block;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: normal;
 }
 
 .liveCard span {
   display: block;
   margin-top: 3px;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--sub);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: normal;
 }
 
 .liveCardMeta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 
 .liveCardMeta b {
@@ -1359,9 +1626,63 @@ button {
   margin-bottom: 0;
 }
 
+.compactTitle {
+  position: relative;
+}
+
 .compactTitle h3 {
   margin: 0;
   font-size: 14px;
+}
+
+.compactTitleAction {
+  margin-left: auto;
+}
+
+.sectionAddButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #0f766e;
+}
+
+.driveFolderField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 6px;
+}
+
+.driveFolderField input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.driveFolderField button {
+  min-height: 34px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.driveFolderHint {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .compactList {
@@ -1501,6 +1822,37 @@ button {
   font-weight: 800;
 }
 
+.editorDangerZone {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.editorDangerZone button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.editorDangerZone button.confirm {
+  background: #be123c;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px #ffe4e6;
+}
+
+.editorDangerZone .editorOpenButton {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
 .datePickerField {
   position: relative;
   display: grid;
@@ -1559,9 +1911,14 @@ button {
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.16);
 }
 
+.productionEditor .datePickerField {
+  z-index: 40;
+}
+
 .productionEditor .miniDatePicker {
-  right: 0;
-  left: auto;
+  right: auto;
+  left: 0;
+  z-index: 80;
 }
 
 .miniDateHead {
@@ -1653,6 +2010,44 @@ button {
   gap: 6px;
 }
 
+.productionViewTabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.productionViewTabs button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.productionViewTabs button.active {
+  border-color: #5eead4;
+  background: #ecfdf5;
+  color: #0f766e;
+}
+
+.productionViewTabs span {
+  display: inline-grid;
+  min-width: 20px;
+  min-height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: var(--sub);
+  font-size: 11px;
+}
+
 .productionEntry {
   display: grid;
   gap: 6px;
@@ -1671,6 +2066,20 @@ button {
   background: var(--soft);
   color: inherit;
   text-align: left;
+}
+
+.productionRowMain {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.productionRowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .productionRow.late {
@@ -1751,6 +2160,7 @@ button {
 
 .productionEditor input,
 .productionEditor select,
+.productionEditor textarea,
 .productionEditor .datePickerButton {
   width: 100%;
   min-height: 34px;
@@ -1763,9 +2173,19 @@ button {
   font-weight: 800;
 }
 
+.productionEditor textarea {
+  min-height: 58px;
+  padding-block: 8px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
 .calendarPanel {
   display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   gap: 9px;
+  height: 100%;
+  min-height: 0;
 }
 
 .calendarMonth {
@@ -1880,6 +2300,11 @@ button {
   background: #fff7f7;
 }
 
+.calendarCell.holiday {
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
 .calendarCell.saturday {
   background: #f8fbff;
 }
@@ -1924,6 +2349,10 @@ button {
 
 .calendarCell.sunday > span {
   color: #b91c1c;
+}
+
+.calendarCell.holiday > span {
+  color: #be123c;
 }
 
 .calendarCell.saturday > span {
@@ -1991,6 +2420,16 @@ button {
   color: var(--blue);
 }
 
+.eventDot.external {
+  background: #e8f2ff;
+  color: #2563eb;
+}
+
+.eventDot.holiday {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
 .eventDot.prep {
   background: var(--yellow-bg);
   color: var(--yellow);
@@ -2003,8 +2442,9 @@ button {
 
 .calendarAgenda {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 7px;
-  min-height: 132px;
+  min-height: 0;
   padding-top: 2px;
 }
 
@@ -2027,9 +2467,24 @@ button {
 
 .agendaList {
   display: grid;
+  align-content: start;
   gap: 6px;
-  max-height: 178px;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.agendaListWrap {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agendaList::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .agendaItem {
@@ -2114,6 +2569,16 @@ button {
   color: var(--blue);
 }
 
+.calendarLegend .external {
+  background: #e8f2ff;
+  color: #2563eb;
+}
+
+.calendarLegend .holiday {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
 .calendarLegend .prep {
   background: var(--yellow-bg);
   color: var(--yellow);
@@ -2147,6 +2612,21 @@ button {
 .pill.blue {
   background: var(--blue-bg);
   color: var(--blue);
+}
+
+.pill.recruiting {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.pill.applied {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+.pill.confirmed {
+  background: #f5f3ff;
+  color: #6d28d9;
 }
 
 .pill.ok {
@@ -2205,6 +2685,141 @@ button {
   box-shadow: -18px 0 44px rgba(24, 35, 51, 0.16);
 }
 
+.templateOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: -18px 0 44px rgba(24, 35, 51, 0.16);
+}
+
+.templateHeader {
+  margin-bottom: 0;
+}
+
+.templateTop,
+.templateMeta,
+.templateTaskFields,
+.templateFooter {
+  display: grid;
+  gap: 10px;
+}
+
+.templateTop {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.templateMeta {
+  grid-template-columns: minmax(0, 1fr) 160px;
+}
+
+.templateTop label,
+.templateMeta label,
+.templateTaskFields label,
+.templateSubtasks {
+  display: grid;
+  gap: 5px;
+}
+
+.templateTop span,
+.templateMeta span,
+.templateTaskFields span,
+.templateSubtasks span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.templateTop input,
+.templateTop select,
+.templateMeta input,
+.templateMeta select,
+.templateTaskFields input,
+.templateTaskFields select,
+.templateTaskHead input,
+.templateSubtasks textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.templateTaskList {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+.templateTaskCard {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid var(--blue);
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.templateTaskHead {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+}
+
+.templateTaskHead strong {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--blue-bg);
+  color: var(--blue);
+  font-size: 12px;
+}
+
+.templateTaskFields {
+  grid-template-columns: minmax(90px, 1fr) minmax(88px, 0.85fr) minmax(88px, 0.85fr) minmax(88px, 0.85fr);
+}
+
+.templateSubtasks textarea {
+  min-height: 58px;
+  padding: 8px 10px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.templateFooter {
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: center;
+}
+
+.previewFooter {
+  grid-template-columns: 120px 120px;
+  justify-content: end;
+}
+
 .drawerHeader {
   display: flex;
   align-items: center;
@@ -2222,6 +2837,11 @@ button {
   border-radius: 9px;
   background: #ffffff;
   color: var(--sub);
+}
+
+.iconButton.compact {
+  width: 34px;
+  height: 34px;
 }
 
 .drawerForm {
@@ -2892,6 +3512,597 @@ button {
   font-size: 11px;
   font-weight: 900;
 }
+
+.chekiView {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.chekiHero,
+.chekiPanel {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.chekiHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 52%, #ecfdf5 100%);
+}
+
+.chekiHero span,
+.chekiPanelHead span,
+.chekiFilters span,
+.chekiDetailHead span,
+.chekiInfoGrid span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chekiHero h2 {
+  margin: 2px 0 4px;
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+.chekiHero p {
+  max-width: 720px;
+  margin: 0;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.chekiStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chekiStats div {
+  display: grid;
+  min-height: 46px;
+  place-items: center;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.chekiStats b {
+  color: var(--teal);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.chekiGrid {
+  display: grid;
+  grid-template-columns: minmax(380px, 0.95fr) minmax(430px, 1.1fr) minmax(280px, 0.72fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.chekiPanel {
+  display: grid;
+  min-height: 0;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.chekiBoard {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.chekiLiveCalendar {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 11px;
+  background: #f8fbff;
+}
+
+.chekiLiveCalendarHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chekiLiveCalendarHead > div {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.chekiLiveCalendarHead strong {
+  font-size: 13px;
+}
+
+.chekiLiveCalendarHead span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chekiLiveCalendarHead button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--sub);
+}
+
+.chekiCalendarWeekdays,
+.chekiCalendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.chekiCalendarWeekdays span {
+  color: var(--sub);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.chekiCalendarWeekdays .sunday {
+  color: #dc2626;
+}
+
+.chekiCalendarWeekdays .saturday {
+  color: #2563eb;
+}
+
+.chekiCalendarGrid button {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.chekiCalendarGrid button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.chekiCalendarGrid button.otherMonth {
+  background: #f8fafc;
+  color: var(--faint);
+}
+
+.chekiCalendarGrid button.hasLive {
+  border-color: #5eead4;
+  background: #ecfdf5;
+  color: #0f766e;
+  opacity: 1;
+}
+
+.chekiCalendarGrid button.hasLive.full {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.chekiCalendarGrid button.hasLive.available b {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.chekiCalendarGrid button.hasLive.full b {
+  background: #64748b;
+  color: #ffffff;
+}
+
+.chekiCalendarGrid button.selected {
+  border-color: #0f766e;
+  background: #ecfdf5;
+  color: #0f766e;
+  box-shadow: inset 0 0 0 1px #0f766e;
+}
+
+.chekiCalendarGrid button.today {
+  border-color: #2563eb;
+}
+
+.chekiCalendarGrid b {
+  display: grid;
+  min-width: 16px;
+  min-height: 16px;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.chekiFilters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 138px;
+  gap: 8px;
+}
+
+.chekiFilters label {
+  display: grid;
+  gap: 4px;
+}
+
+.chekiFilters select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.chekiShiftList,
+.chekiConfirmedList {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.chekiShiftList::-webkit-scrollbar,
+.chekiConfirmedList::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.chekiShiftCard {
+  display: grid;
+  gap: 9px;
+  width: 100%;
+  min-height: 92px;
+  padding: 11px;
+  border: 1px solid #d8e0ec;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  text-align: left;
+}
+
+.chekiShiftCard.selected {
+  border-color: #5eead4;
+  background: #f0fdfa;
+  box-shadow: inset 0 0 0 1px #5eead4;
+}
+
+.chekiShiftTitle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.chekiShiftTitle strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.chekiShiftTitle span,
+.chekiShiftMeta span,
+.chekiConfirmedItem span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chekiShiftMeta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chekiShiftMeta span {
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.chekiDetail {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  gap: 11px;
+}
+
+.chekiDetailHead,
+.chekiPanelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chekiDetailHead h3,
+.chekiPanelHead h3 {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.chekiInfoGrid.compact {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chekiInfoGrid.compact > span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chekiInfoGrid.compact svg {
+  flex: 0 0 auto;
+  color: #0f766e;
+}
+
+.chekiInfoGrid.compact strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.chekiInfoGrid.compact .cancelRule {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.chekiDetailBox,
+.chekiNextNote {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.chekiDetailBox strong,
+.chekiNextNote strong {
+  font-size: 13px;
+}
+
+.chekiDetailBox p {
+  margin: 0;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.chekiApplyButton {
+  display: inline-flex;
+  width: fit-content;
+  min-width: 190px;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  justify-self: start;
+  padding: 0 18px;
+}
+
+.chekiCancelButton,
+.chekiOwnCancelButton {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff7f7;
+  color: #be123c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.chekiCancelButton {
+  min-width: 190px;
+  min-height: 42px;
+  justify-self: start;
+}
+
+.chekiOwnCancelButton {
+  margin-top: 4px;
+}
+
+.chekiApplyButton:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+  opacity: 1;
+}
+
+.chekiNextNote {
+  align-self: end;
+  background: #f8fafc;
+}
+
+.chekiNextNote span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.chekiSchedule {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.chekiConfirmedItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--ink);
+  text-align: left;
+}
+
+.chekiConfirmedItem.selected {
+  border-color: #5eead4;
+  background: #f0fdfa;
+  box-shadow: inset 0 0 0 1px #5eead4;
+}
+
+.chekiConfirmedItem strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.chekiOwnDetail {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  background: #f0f9ff;
+}
+
+.chekiOwnDetail strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.chekiOwnDetail span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.chekiConfirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.chekiConfirmDialog {
+  display: grid;
+  width: min(420px, 100%);
+  gap: 9px;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+}
+
+.chekiConfirmDialog > span {
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chekiConfirmDialog h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+
+.chekiConfirmDialog p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.chekiConfirmDialog strong {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.chekiConfirmDialog > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.chekiConfirmDialog button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.chekiConfirmDialog button.secondary {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.chekiConfirmDialog button.danger {
+  background: #be123c;
+}
 /* Manager view: group-first board */
 .liveManagerSummary {
   gap: 8px;
@@ -3150,15 +4361,20 @@ button {
 }
 
 .managerContactPanel {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 48px;
 }
 
-.managerContactChips {
+.managerContactChips,
+.managerRoleChips {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.managerRoleChips {
+  grid-column: 1;
 }
 
 .managerContactChips b {
@@ -3185,7 +4401,8 @@ button {
   font-size: 10px;
 }
 /* Manager contact filter buttons */
-.managerContactChips button {
+.managerContactChips button,
+.managerRoleChips button {
   display: inline-flex;
   min-height: 28px;
   align-items: center;
@@ -3199,20 +4416,23 @@ button {
   font-weight: 900;
 }
 
-.managerContactChips button.active {
+.managerContactChips button.active,
+.managerRoleChips button.active {
   border-color: #5eead4;
   background: #ecfdf5;
   color: #0f766e;
   box-shadow: inset 0 0 0 1px #5eead4;
 }
 
-.managerContactChips button small {
+.managerContactChips button small,
+.managerRoleChips button small {
   color: var(--sub);
   font-size: 11px;
   font-weight: 900;
 }
 
-.managerContactChips button.active small {
+.managerContactChips button.active small,
+.managerRoleChips button.active small {
   color: #0f766e;
 }
 /* Manager summary simplification */
@@ -3329,6 +4549,46 @@ button {
 .selectedLiveIssueEntry {
   display: grid;
   gap: 6px;
+}
+
+.selectedLiveIssueSection {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.selectedLiveIssueSectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 2px;
+}
+
+.selectedLiveIssueSectionHead div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.selectedLiveIssueSectionHead strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.selectedLiveIssueSectionHead span {
+  flex: 0 0 auto;
+  min-width: 34px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
 }
 
 .selectedLiveIssue.active {
@@ -3577,6 +4837,29 @@ button {
   font-weight: 900;
 }
 
+.runScheduleFilter {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.runScheduleFilter span {
+  color: var(--sub);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.runScheduleFilter select {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .runScheduleTabs button {
   padding: 0 10px;
 }
@@ -3589,6 +4872,7 @@ button {
 
 .runScheduleActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -3600,6 +4884,10 @@ button {
   color: var(--ink);
 }
 
+.runTemplateSelect {
+  flex: 0 0 132px;
+}
+
 .runScheduleRows {
   display: grid;
   gap: 6px;
@@ -3607,7 +4895,7 @@ button {
 
 .runScheduleRow {
   display: grid;
-  grid-template-columns: 72px minmax(140px, 1.15fr) 78px minmax(120px, 0.8fr) minmax(120px, 0.9fr) 30px;
+  grid-template-columns: 72px minmax(140px, 1.15fr) 104px 78px minmax(120px, 0.8fr) minmax(120px, 0.9fr) 30px;
   gap: 5px;
   align-items: center;
   padding: 7px;
@@ -3649,13 +4937,18 @@ button {
 
 .runScheduleAdd {
   display: grid;
-  grid-template-columns: 72px minmax(140px, 1.15fr) 78px minmax(120px, 0.8fr) minmax(120px, 0.9fr) 54px;
-  gap: 6px;
-  padding-top: 2px;
+  grid-template-columns: 72px minmax(140px, 1.15fr) 104px 78px minmax(120px, 0.8fr) minmax(120px, 0.9fr) 30px;
+  gap: 5px;
+  align-items: center;
+  padding: 7px;
+  border: 1px solid transparent;
 }
 
 .runScheduleAdd button {
+  display: grid;
+  width: 30px;
   min-height: 31px;
+  place-items: center;
   border: 0;
   border-radius: 8px;
   background: #0f766e;
@@ -3711,15 +5004,19 @@ button {
   justify-content: stretch;
 }
 
+.runScheduleFilter {
+  grid-column: 1 / -1;
+}
+
 .runScheduleActions button {
   width: 100%;
 }
 
 .runScheduleRow {
-  grid-template-columns: 72px minmax(0, 1fr) 78px 30px;
+  grid-template-columns: 72px minmax(0, 1fr) 104px 30px;
   grid-template-areas:
-    "time title owner delete"
-    "place place note note";
+    "time title kind delete"
+    "owner place note note";
 }
 
 .runScheduleRow select[aria-label="時刻"] {
@@ -3728,6 +5025,52 @@ button {
 
 .runScheduleRow input[aria-label="内容"] {
   grid-area: title;
+}
+
+.runScheduleRow select[aria-label="担当区分"] {
+  grid-area: kind;
+}
+
+.ownerKindSelect {
+  border-color: var(--owner-kind-border, var(--line)) !important;
+  background: var(--owner-kind-bg, #ffffff) !important;
+  color: var(--owner-kind-color, var(--ink)) !important;
+  font-weight: 900 !important;
+}
+
+.ownerKindSelect option {
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.ownerKind-foc {
+  --owner-kind-border: #99f6e4;
+  --owner-kind-bg: #ecfdf5;
+  --owner-kind-color: #0f766e;
+}
+
+.ownerKind-cheki {
+  --owner-kind-border: #bfdbfe;
+  --owner-kind-bg: #eff6ff;
+  --owner-kind-color: #2563eb;
+}
+
+.ownerKind-cast {
+  --owner-kind-border: #ddd6fe;
+  --owner-kind-bg: #f5f3ff;
+  --owner-kind-color: #6d28d9;
+}
+
+.ownerKind-venue {
+  --owner-kind-border: #bae6fd;
+  --owner-kind-bg: #f0f9ff;
+  --owner-kind-color: #0369a1;
+}
+
+.ownerKind-other {
+  --owner-kind-border: #e2e8f0;
+  --owner-kind-bg: #f8fafc;
+  --owner-kind-color: #475569;
 }
 
 .runScheduleRow select[aria-label="担当"] {
@@ -3747,7 +5090,7 @@ button {
 }
 
 .runScheduleAdd {
-  grid-template-columns: 72px minmax(0, 1fr) 78px minmax(0, 0.75fr) minmax(0, 0.85fr) 52px;
+  grid-template-columns: 72px minmax(0, 1fr) 104px 78px minmax(0, 0.75fr) minmax(0, 0.85fr) 30px;
 }
 
 /* Large schedule overlay */
@@ -3793,7 +5136,322 @@ button {
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 24px 80px rgba(24, 35, 51, 0.18);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.runTemplateEditor {
+  position: absolute;
+  inset: 18px 20px;
+  z-index: 4;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(24, 35, 51, 0.18);
+}
+
+.runTemplateRowsShell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.runTemplateRows {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
+  padding-right: 0;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.runTemplateRows::-webkit-scrollbar,
+.runTemplatePreviewRows::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.runTemplateEditSection {
+  display: grid;
+  gap: 8px;
+  min-width: 776px;
+}
+
+.runTemplateEditSection h3 {
+  margin: 0;
+  padding-left: 38px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.runTemplateColumnLabels {
+  display: grid;
+  grid-template-columns: 78px minmax(174px, 1.2fr) 112px 84px minmax(122px, 0.8fr) minmax(132px, 0.95fr) 34px;
+  gap: 6px;
+  padding-left: 38px;
+}
+
+.runTemplateColumnLabels span {
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.runTemplateColumnLabels span:last-child {
+  text-align: center;
+}
+
+.runTemplateEditTimeline {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding-left: 38px;
+}
+
+.runTemplateEditTimeline::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 14px;
+  width: 2px;
+  border-radius: 999px;
+  background: #ded5c7;
+}
+
+.runTemplateRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 78px minmax(174px, 1.2fr) 112px 84px minmax(122px, 0.8fr) minmax(132px, 0.95fr) 34px;
+  gap: 6px;
+  align-items: center;
+  min-height: 46px;
+  padding: 8px;
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+.runTemplateRow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -28px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #d6cab9;
+  box-shadow: 0 0 0 5px #ffffff;
+  transform: translateY(-50%);
+}
+
+.runTemplateRow input,
+.runTemplateRow select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.runTemplateScrollHint {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--sub);
+  box-shadow: 0 8px 18px rgba(24, 35, 51, 0.12);
+  pointer-events: none;
+}
+
+.runTemplateScrollHintTop {
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.runTemplateScrollHintBottom {
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.runTemplateScrollHintLeft {
+  top: 50%;
+  left: 5px;
+  transform: translateY(-50%);
+}
+
+.runTemplateScrollHintRight {
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+}
+
+.runTemplatePreview {
+  position: absolute;
+  inset: 18px 20px;
+  z-index: 5;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(24, 35, 51, 0.2);
+}
+
+.runTemplatePreviewRows {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.runTemplatePreviewSection {
+  display: grid;
+  gap: 9px;
+}
+
+.runTemplatePreviewSection h3 {
+  margin: 0;
+  padding-left: 38px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.runTemplatePreviewTimeline {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding-left: 38px;
+}
+
+.runTemplatePreviewTimeline::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 14px;
+  width: 2px;
+  border-radius: 999px;
+  background: #ded5c7;
+}
+
+.runTemplatePreviewRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 82px minmax(190px, 1.2fr) 112px 86px minmax(130px, 0.8fr) minmax(150px, 0.95fr);
+  gap: 6px;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+.runTemplatePreviewRow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -28px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #d6cab9;
+  box-shadow: 0 0 0 5px #ffffff;
+  transform: translateY(-50%);
+}
+
+.runTemplatePreviewRow strong,
+.runTemplatePreviewRow b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.runTemplatePreviewRow .previewTime,
+.runTemplatePreviewRow small,
+.runTemplatePreviewRow b,
+.runTemplatePreviewRow .previewOwnerKind {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.runTemplatePreviewRow .previewTime {
+  justify-content: center;
+  background: #f8fafc;
+  font-weight: 900;
+}
+
+.runTemplatePreviewRow .previewOwnerKind {
+  display: inline-flex;
+  justify-content: center;
+  border: 1px solid var(--owner-kind-border, var(--line));
+  background: var(--owner-kind-bg, #ffffff);
+  color: var(--owner-kind-color, var(--ink));
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.runTemplatePreviewRow small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.runTemplatePreviewEmpty {
+  display: grid;
+  min-height: 46px;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .scheduleOverlay .compactSection {
@@ -3826,6 +5484,11 @@ button {
   justify-content: flex-end;
 }
 
+.scheduleOverlay .runScheduleFilter {
+  grid-column: auto;
+  min-width: 130px;
+}
+
 .scheduleOverlay .runScheduleActions button {
   width: auto;
   min-width: 88px;
@@ -3835,7 +5498,8 @@ button {
   position: relative;
   align-content: start;
   gap: 10px;
-  padding-left: 28px;
+  min-width: 0;
+  padding-left: 24px;
 }
 
 .scheduleOverlay .runScheduleRows::before {
@@ -3851,8 +5515,9 @@ button {
 
 .scheduleOverlay .runScheduleRow {
   position: relative;
-  grid-template-columns: 84px minmax(220px, 1.25fr) 92px minmax(150px, 0.85fr) minmax(160px, 0.95fr) 34px;
-  grid-template-areas: "time title owner place note delete";
+  grid-template-columns: 82px minmax(190px, 1.2fr) 110px 90px minmax(140px, 0.8fr) minmax(150px, 0.95fr) 34px;
+  grid-template-areas: "time title kind owner place note delete";
+  gap: 6px;
   padding: 9px;
   border-color: #d9e1ec;
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
@@ -3862,7 +5527,7 @@ button {
   content: "";
   position: absolute;
   top: 50%;
-  left: -23px;
+  left: -21px;
   width: 9px;
   height: 9px;
   border-radius: 999px;
@@ -3882,10 +5547,16 @@ button {
 }
 
 .scheduleOverlay .runScheduleAdd {
-  grid-template-columns: 84px minmax(220px, 1.25fr) 92px minmax(150px, 0.85fr) minmax(160px, 0.95fr) 64px;
-  gap: 8px;
-  margin-left: 28px;
-  padding-top: 4px;
+  grid-template-columns: 82px minmax(190px, 1.2fr) 110px 90px minmax(140px, 0.8fr) minmax(150px, 0.95fr) 34px;
+  gap: 6px;
+  width: calc(100% - 24px);
+  margin-left: 24px;
+  padding: 9px;
+}
+
+.scheduleOverlay .runScheduleAdd button {
+  width: 34px;
+  min-height: 31px;
 }
 
 .scheduleOverlay .scheduleEmpty {
@@ -3905,6 +5576,18 @@ button {
   }
 
   .scheduleOverlay .runScheduleRow {
-    grid-template-columns: 80px minmax(180px, 1fr) 88px minmax(130px, 0.8fr) minmax(140px, 0.85fr) 34px;
+    grid-template-columns: 78px minmax(160px, 1fr) 104px 86px minmax(120px, 0.78fr) minmax(130px, 0.85fr) 34px;
+  }
+
+  .scheduleOverlay .runScheduleAdd {
+    grid-template-columns: 78px minmax(160px, 1fr) 104px 86px minmax(120px, 0.78fr) minmax(130px, 0.85fr) 34px;
+  }
+
+  .runTemplateRow {
+    grid-template-columns: 76px minmax(150px, 1fr) 104px 82px minmax(112px, 0.78fr) minmax(120px, 0.85fr) 34px;
+  }
+
+  .runTemplateColumnLabels {
+    grid-template-columns: 76px minmax(150px, 1fr) 104px 82px minmax(112px, 0.78fr) minmax(120px, 0.85fr) 34px;
   }
 }
