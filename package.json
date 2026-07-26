@@ -7,15 +7,18 @@
     "dev": "vite --host 127.0.0.1",
     "generate:calendar": "node scripts/generate-calendar-events.mjs",
     "build": "npm run generate:calendar && tsc && vite build",
+    "build:firebase": "npm run generate:calendar && tsc && vite build --base /",
+    "deploy:firebase": "npm run build:firebase && firebase deploy --only hosting",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.2",
     "@vitejs/plugin-react": "^5.0.0",
     "lucide-react": "^0.475.0",
-    "vite": "^6.1.0",
-    "typescript": "^5.7.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.8",

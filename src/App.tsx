@@ -32,6 +32,19 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  type AppUserProfile,
+  type AppUserRole,
+  type AppUserStatus,
+  deleteUserProfile,
+  ensureCurrentUserProfile,
+  loadUserProfiles,
+  loadWorkspaceData,
+  saveChekiApplications,
+  saveWorkspaceData,
+  updateUserProfile,
+} from "./appDatabase";
+import { isSupabaseConfigured, supabase, type Session } from "./supabaseClient";
 
 type LiveStatus = "計画" | "進行中" | "完了" | "キャンセル";
 type TaskStatus = "未着手" | "進行中" | "完了";
@@ -53,6 +66,7 @@ type ManagerIssueKind = "遅延" | "今日" | "3日以内" | "外注" | "確認�
 type ManagerRisk = "high" | "warn" | "ok";
 type ManagerContact = { owner: string; count: number; reason: string; score: number };
 type GroupPage = {
+  id?: string;
   name: string;
   manager: string;
   photo: string;
@@ -151,6 +165,7 @@ type LiveProject = {
   photoShoot: string;
   productionCompany: string;
   driveFolderUrl?: string;
+  sourceCalendarEventId?: string;
   tasks: Task[];
   tickets: TicketPlan[];
   productionItems: ProductionItem[];
@@ -254,16 +269,18 @@ type ChekiCalendarDateStatus = "available" | "full";
 
 const initialGroupPages: GroupPage[] = [
   {
+    id: "group-heymommy",
     name: "Hey!Mommy!",
     manager: "小杉",
-    photo: "https://picsum.photos/seed/heymommy/96/96",
+    photo: "",
     calendarUrl:
       "https://calendar.google.com/calendar/u/0/newembed?height=600&wkst=1&bgcolor=%23f772cf&ctz=Asia/Tokyo&title=Hey!Mommy!&src=aGV5bW9tbXkxMTExMUBnbWFpbC5jb20&src=amEuamFwYW5lc2UjaG9saWRheUBncm91cC52LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%23D81B60&color=%23F09300",
   },
   {
+    id: "group-scramble-smile",
     name: "SCRAMBLE SMILE",
     manager: "御手洗",
-    photo: "https://picsum.photos/seed/scramble-smile/96/96",
+    photo: "",
     calendarUrl: "https://calendar.google.com/calendar/u/0/newembed?src=info@scramblesmile.jp&ctz=Asia/Tokyo",
   },
 ];
@@ -452,6 +469,25 @@ function cloneTaskTemplateSet(template: TaskTemplateSet): TaskTemplateSet {
   };
 }
 
+function createBlankTaskTemplateSet(owner = managers[0]): TaskTemplateSet {
+  return {
+    id: `template-${crypto.randomUUID()}`,
+    name: "",
+    liveType: "共通",
+    items: [
+      {
+        id: `template-item-${crypto.randomUUID()}`,
+        phase: "イベント",
+        title: "",
+        offset: -30,
+        owner,
+        priority: "通常",
+        subtasks: [],
+      },
+    ],
+  };
+}
+
 function createDefaultRunScheduleTemplateSet(): RunScheduleTemplateSet {
   return {
     id: "run-template-standard",
@@ -479,408 +515,55 @@ function buildRunScheduleFromTemplate(projectId: string, templateItems: RunSched
   );
 }
 
-const initialProjects: LiveProject[] = [
-  {
-    id: "live-elandia-3rd",
-    group: "Hey!Mommy!",
-    title: "3rd Anniversary Live",
-    venue: "Spotify O-WEST",
-    eventDate: "2026-06-10",
-    status: "進行中",
-    manager: "小杉",
-    liveType: "ワンマン",
-    ticketLaunch: "2026-05-20T20:00",
-    rehearsal: "2026-06-08T14:00 @ 新宿リハーサルスタジオ",
-    photoShoot: "2026-05-22T11:00 @ 代々木スタジオ",
-    productionCompany: "Blue Stage 制作",
-    tasks: applyStatuses(generateTasks("live-elandia-3rd", "2026-06-10"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "完了",
-      "FC・一般スケジュール決定": "完了",
-      チケットページ作成: "完了",
-      タイムテーブル作成: "進行中",
-      楽曲制作: "完了",
-      セトリ: "進行中",
-      ゲネプロスタジオ予約: "完了",
-      当日バイト手配: "進行中",
-      当日カメラマン手配: "完了",
-      告知画像の依頼: "完了",
-      デザイナー制作発注: "完了",
-      制作物リストの企画: "進行中",
-      グッズ入稿: "未着手",
-      衣装イメージ共有: "完了",
-      最終確認: "進行中",
-      "アー写＆ブロマイド撮影": "完了",
-    }),
-    tickets: [
-      {
-        id: "ticket-elandia-vip",
-        name: "VIP",
-        price: 12000,
-        saleStart: "2026-05-20T20:00",
-        benefit: "優先入場・限定ブロマイド",
-      },
-      {
-        id: "ticket-elandia-general",
-        name: "一般前売",
-        price: 4500,
-        saleStart: "2026-05-21T20:00",
-        benefit: "入場",
-      },
-    ],
-    productionItems: [
-      {
-        id: "item-elandia-keyvisual",
-        name: "告知画像",
-        owner: "御手洗",
-        designer: "Design Nao",
-        vendor: "Design Nao",
-        dueDate: "2026-05-18",
-        status: "納品済",
-        memo: "公開済みデータ確認済み",
-      },
-      {
-        id: "item-elandia-bromide",
-        name: "ブロマイド",
-        owner: "鍋島",
-        designer: "Photo K",
-        vendor: "Photo K",
-        dueDate: "2026-06-04",
-        status: "確認待ち",
-        memo: "最終確認待ち",
-      },
-      {
-        id: "item-elandia-shirt",
-        name: "記念Tシャツ",
-        owner: "御手洗",
-        designer: "PrintWorks",
-        vendor: "PrintWorks",
-        dueDate: "2026-06-03",
-        status: "制作中",
-        memo: "サイズ展開確認中",
-      },
-    ],
-  },
-  {
-    id: "live-elandia-regular",
-    group: "Hey!Mommy!",
-    title: "Monthly Stage vol.18",
-    venue: "渋谷Club Asia",
-    eventDate: "2026-06-28",
-    status: "計画",
-    manager: "小杉",
-    liveType: "定期公演",
-    ticketLaunch: "2026-06-12T20:00",
-    rehearsal: "2026-06-26T13:00 @ 渋谷サウンドスタジオ",
-    photoShoot: "2026-06-18T11:00 @ 原宿スタジオ",
-    productionCompany: "ElandCo internal",
-    tasks: applyStatuses(generateTasks("live-elandia-regular", "2026-06-28"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "進行中",
-      チケットページ作成: "未着手",
-    }),
-    tickets: defaultTickets("2026-06-12T20:00", "定期公演"),
-    productionItems: defaultProductionItems("2026-06-28"),
-  },
-  {
-    id: "live-nova-summer",
-    group: "SCRAMBLE SMILE",
-    title: "夏のワンマンライブ",
-    venue: "Zepp Shinjuku",
-    eventDate: "2026-07-20",
-    status: "進行中",
-    manager: "御手洗",
-    liveType: "ワンマン",
-    ticketLaunch: "2026-06-15T21:00",
-    rehearsal: "2026-07-17T12:00 @ 渋谷サウンドスタジオ",
-    photoShoot: "2026-06-20T10:00 @ 目黒スタジオ",
-    productionCompany: "Orbit Live Works",
-    tasks: applyStatuses(generateTasks("live-nova-summer", "2026-07-20"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "完了",
-      "FC・一般スケジュール決定": "進行中",
-      チケットページ作成: "未着手",
-      告知画像の依頼: "進行中",
-      衣装イメージ共有: "進行中",
-    }),
-    tickets: [
-      {
-        id: "ticket-nova-premium",
-        name: "プレミアム",
-        price: 15000,
-        saleStart: "2026-06-15T21:00",
-        benefit: "優先入場・限定グッズ",
-      },
-      {
-        id: "ticket-nova-general",
-        name: "一般",
-        price: 6000,
-        saleStart: "2026-06-16T21:00",
-        benefit: "入場",
-      },
-    ],
-    productionItems: [
-      {
-        id: "item-nova-poster",
-        name: "駅貼りポスター",
-        owner: "御手洗",
-        designer: "Design Nao",
-        vendor: "Design Nao",
-        dueDate: "2026-06-24",
-        status: "依頼済",
-        memo: "",
-      },
-      {
-        id: "item-nova-towel",
-        name: "マフラータオル",
-        owner: "御手洗",
-        designer: "PrintWorks",
-        vendor: "PrintWorks",
-        dueDate: "2026-07-01",
-        status: "未依頼",
-        memo: "",
-      },
-    ],
-  },
-  {
-    id: "live-nova-birthday",
-    group: "SCRAMBLE SMILE",
-    title: "美緒 生誕祭",
-    venue: "新宿BLAZE",
-    eventDate: "2026-08-08",
-    status: "計画",
-    manager: "御手洗",
-    liveType: "生誕祭",
-    ticketLaunch: "2026-07-10T21:00",
-    rehearsal: "2026-08-06T15:00 @ 新宿リハーサルスタジオ",
-    photoShoot: "2026-07-13T10:00 @ 目黒スタジオ",
-    productionCompany: "Orbit Live Works",
-    tasks: updateDemoTasks(completeTasks(generateTasks("live-nova-birthday", "2026-08-08")), {
-      当日バイト手配: { status: "進行中", dueDate: addDays(today, 2) },
-    }),
-    tickets: defaultTickets("2026-07-10T21:00", "生誕祭"),
-    productionItems: defaultProductionItems("2026-08-08"),
-  },
-  {
-    id: "live-lumiere-regular",
-    group: "Hey!Mommy!",
-    title: "定期公演 vol.12",
-    venue: "新宿ReNY",
-    eventDate: "2026-06-15",
-    status: "計画",
-    manager: "鍋島",
-    liveType: "定期公演",
-    ticketLaunch: "2026-06-05T20:00",
-    rehearsal: "2026-06-13T13:00 @ 池袋リハーサルベース",
-    photoShoot: "2026-06-07T12:00 @ 原宿スタジオ",
-    productionCompany: "ElandCo internal",
-    tasks: applyStatuses(generateTasks("live-lumiere-regular", "2026-06-15"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "進行中",
-      "FC・一般スケジュール決定": "未着手",
-      チケットページ作成: "未着手",
-    }),
-    tickets: [
-      {
-        id: "ticket-lumiere-priority",
-        name: "優先",
-        price: 7000,
-        saleStart: "2026-06-05T20:00",
-        benefit: "優先入場・限定ステッカー",
-      },
-      {
-        id: "ticket-lumiere-general",
-        name: "一般",
-        price: 3500,
-        saleStart: "2026-06-06T20:00",
-        benefit: "入場",
-      },
-    ],
-    productionItems: [
-      {
-        id: "item-lumiere-sticker",
-        name: "限定ステッカー",
-        owner: "小杉",
-        vendor: "QuickPrint",
-        dueDate: "2026-06-10",
-        status: "未依頼",
-      },
-    ],
-  },
-  {
-    id: "live-lumiere-summer",
-    group: "Hey!Mommy!",
-    title: "夏のショーケース",
-    venue: "白金高輪SELENE b2",
-    eventDate: "2026-07-05",
-    status: "進行中",
-    manager: "鍋島",
-    liveType: "ワンマン",
-    ticketLaunch: "2026-06-09T20:00",
-    rehearsal: "2026-07-03T13:00 @ 池袋リハーサルベース",
-    photoShoot: "2026-06-14T12:00 @ 原宿スタジオ",
-    productionCompany: "ElandCo internal",
-    tasks: applyStatuses(generateTasks("live-lumiere-summer", "2026-07-05"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "完了",
-      "FC・一般スケジュール決定": "進行中",
-    }),
-    tickets: defaultTickets("2026-06-09T20:00", "ワンマン"),
-    productionItems: defaultProductionItems("2026-07-05"),
-  },
-  {
-    id: "live-asteria-debut",
-    group: "SCRAMBLE SMILE",
-    title: "デビューお披露目ライブ",
-    venue: "代官山UNIT",
-    eventDate: "2026-06-22",
-    status: "進行中",
-    manager: "小杉",
-    liveType: "ワンマン",
-    ticketLaunch: "2026-06-07T20:00",
-    rehearsal: "2026-06-20T13:00 @ 恵比寿スタジオ",
-    photoShoot: "2026-06-10T11:00 @ 中目黒スタジオ",
-    productionCompany: "First Line Production",
-    tasks: applyStatuses(generateTasks("live-asteria-debut", "2026-06-22"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "完了",
-      チケットページ作成: "進行中",
-    }),
-    tickets: defaultTickets("2026-06-07T20:00", "ワンマン"),
-    productionItems: defaultProductionItems("2026-06-22"),
-  },
-  {
-    id: "live-asteria-vol2",
-    group: "SCRAMBLE SMILE",
-    title: "Star Trail vol.2",
-    venue: "下北沢シャングリラ",
-    eventDate: "2026-07-18",
-    status: "計画",
-    manager: "小杉",
-    liveType: "定期公演",
-    ticketLaunch: "2026-07-01T20:00",
-    rehearsal: "2026-07-16T14:00 @ 下北沢スタジオ",
-    photoShoot: "2026-06-24T12:00 @ 代々木スタジオ",
-    productionCompany: "First Line Production",
-    tasks: applyStatuses(generateTasks("live-asteria-vol2", "2026-07-18"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "進行中",
-    }),
-    tickets: defaultTickets("2026-07-01T20:00", "定期公演"),
-    productionItems: defaultProductionItems("2026-07-18"),
-  },
-  {
-    id: "live-prism-note-release",
-    group: "Hey!Mommy!",
-    title: "新曲リリースライブ",
-    venue: "Veats Shibuya",
-    eventDate: "2026-07-12",
-    status: "進行中",
-    manager: "御手洗",
-    liveType: "ワンマン",
-    ticketLaunch: "2026-06-18T21:00",
-    rehearsal: "2026-07-10T13:00 @ 渋谷サウンドスタジオ",
-    photoShoot: "2026-06-21T10:00 @ 目黒スタジオ",
-    productionCompany: "Sound Arc",
-    tasks: applyStatuses(generateTasks("live-prism-note-release", "2026-07-12"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      告知画像の依頼: "進行中",
-    }),
-    tickets: defaultTickets("2026-06-18T21:00", "ワンマン"),
-    productionItems: defaultProductionItems("2026-07-12"),
-  },
-  {
-    id: "live-prism-note-regular",
-    group: "Hey!Mommy!",
-    title: "Prism Room vol.7",
-    venue: "GARRET udagawa",
-    eventDate: "2026-08-02",
-    status: "計画",
-    manager: "御手洗",
-    liveType: "定期公演",
-    ticketLaunch: "2026-07-15T20:00",
-    rehearsal: "2026-07-31T14:00 @ 渋谷リハーサル",
-    photoShoot: "2026-07-08T12:00 @ 原宿スタジオ",
-    productionCompany: "Sound Arc",
-    tasks: applyStatuses(generateTasks("live-prism-note-regular", "2026-08-02"), {
-      イベント日決定: "完了",
-    }),
-    tickets: defaultTickets("2026-07-15T20:00", "定期公演"),
-    productionItems: defaultProductionItems("2026-08-02"),
-  },
-  {
-    id: "live-mirai-palette-first",
-    group: "SCRAMBLE SMILE",
-    title: "初単独ライブ",
-    venue: "恵比寿LIQUIDROOM",
-    eventDate: "2026-06-30",
-    status: "進行中",
-    manager: "鍋島",
-    liveType: "ワンマン",
-    ticketLaunch: "2026-06-11T21:00",
-    rehearsal: "2026-06-28T13:00 @ 恵比寿スタジオ",
-    photoShoot: "2026-06-16T10:00 @ 代々木スタジオ",
-    productionCompany: "Palette Works",
-    tasks: applyStatuses(generateTasks("live-mirai-palette-first", "2026-06-30"), {
-      イベント日決定: "完了",
-      "会場決定＆予約": "完了",
-      ライブタイトル決定: "完了",
-      "FC・一般スケジュール決定": "進行中",
-    }),
-    tickets: defaultTickets("2026-06-11T21:00", "ワンマン"),
-    productionItems: defaultProductionItems("2026-06-30"),
-  },
-  {
-    id: "live-mirai-palette-regular",
-    group: "SCRAMBLE SMILE",
-    title: "Palette Lab vol.3",
-    venue: "新宿MARZ",
-    eventDate: "2026-07-26",
-    status: "計画",
-    manager: "鍋島",
-    liveType: "定期公演",
-    ticketLaunch: "2026-07-09T20:00",
-    rehearsal: "2026-07-24T14:00 @ 新宿スタジオ",
-    photoShoot: "2026-07-02T11:00 @ 目黒スタジオ",
-    productionCompany: "Palette Works",
-    tasks: completeTasks(generateTasks("live-mirai-palette-regular", "2026-07-26")),
-    tickets: publishTickets(defaultTickets("2026-07-09T20:00", "定期公演")),
-    productionItems: completeProductionItems(defaultProductionItems("2026-07-26")),
-  },
-];
+const initialProjects: LiveProject[] = [];
+const authEnabled = import.meta.env.VITE_AUTH_ENABLED === "true";
+const noAuthUserId = "00000000-0000-0000-0000-000000000000";
 
 function App() {
-  const [projects, setProjects] = useState(initialProjects);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authView, setAuthView] = useState<"signin" | "signup" | "reset">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState<AppUserProfile | null>(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [userProfiles, setUserProfiles] = useState<AppUserProfile[]>([]);
+  const [userManagementMessage, setUserManagementMessage] = useState("");
+  const [managerSection, setManagerSection] = useState<"status" | "users">("status");
+  const [isDataReady, setIsDataReady] = useState(!isSupabaseConfigured);
+  const [isLoadingData, setIsLoadingData] = useState(isSupabaseConfigured);
+  const [loadError, setLoadError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"未接続" | "保存中" | "保存済み" | "保存失敗">(
+    isSupabaseConfigured ? "保存済み" : "未接続",
+  );
+  const lastSavedSnapshotRef = useRef("");
+  const saveTimerRef = useRef<number | null>(null);
+  const [projects, setProjects] = useState<LiveProject[]>(initialProjects);
   const [groups, setGroups] = useState<GroupPage[]>(initialGroupPages);
   const [externalCalendarItems, setExternalCalendarItems] = useState<CalendarItem[]>([]);
   const [appMode, setAppMode] = useState<AppMode>("work");
   const [managerGroupFilter, setManagerGroupFilter] = useState("全グループ");
-  const [selectedManagerLiveId, setSelectedManagerLiveId] = useState(initialProjects[0].id);
+  const [selectedManagerLiveId, setSelectedManagerLiveId] = useState(initialProjects[0]?.id ?? "");
   const [managerContactFilter, setManagerContactFilter] = useState("全員");
   const [managerRoleFilter, setManagerRoleFilter] = useState<TaskRoleFilter>("全ロール");
   const [selectedManagerIssueId, setSelectedManagerIssueId] = useState("");
   const [activeGroup, setActiveGroup] = useState(initialGroupPages[0].name);
-  const [selectedLiveId, setSelectedLiveId] = useState(initialProjects[0].id);
+  const [selectedLiveId, setSelectedLiveId] = useState(initialProjects[0]?.id ?? "");
   const [taskView, setTaskView] = useState<TaskView>("未着手");
   const [liveListView, setLiveListView] = useState<LiveListView>("未");
   const [query, setQuery] = useState("");
-  const [taskTemplateSets, setTaskTemplateSets] = useState<TaskTemplateSet[]>(() => [
-    createDefaultTaskTemplateSet(),
-  ]);
-  const [selectedCreateTemplateId, setSelectedCreateTemplateId] = useState("template-standard");
+  const [taskTemplateSets, setTaskTemplateSets] = useState<TaskTemplateSet[]>([]);
+  const [selectedCreateTemplateId, setSelectedCreateTemplateId] = useState("");
   const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
-  const [templateDraft, setTemplateDraft] = useState<TaskTemplateSet>(() => createDefaultTaskTemplateSet());
+  const [templateDraft, setTemplateDraft] = useState<TaskTemplateSet>(() => createBlankTaskTemplateSet());
   const [runScheduleTemplateSets, setRunScheduleTemplateSets] = useState<RunScheduleTemplateSet[]>(() => [
     createDefaultRunScheduleTemplateSet(),
   ]);
   const [selectedRunScheduleTemplateId, setSelectedRunScheduleTemplateId] = useState("run-template-standard");
+  const [appliedChekiShiftIds, setAppliedChekiShiftIds] = useState<string[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [newTaskOwner, setNewTaskOwner] = useState(selectedLiveId ? "小杉" : managers[0]);
@@ -920,6 +603,404 @@ function App() {
   const selectedRunScheduleTemplate =
     runScheduleTemplateSets.find((template) => template.id === selectedRunScheduleTemplateId) ??
     runScheduleTemplateSets[0];
+  const userId = authEnabled ? session?.user.id : noAuthUserId;
+  const isApprovedUser = !authEnabled || currentUserProfile?.status === "active";
+  const userRole: AppUserRole = !authEnabled
+    ? "admin"
+    : currentUserProfile?.status === "active"
+      ? currentUserProfile.role
+      : "cheki";
+  const isAdmin = userRole === "admin";
+  const isEmployee = userRole === "admin" || userRole === "employee";
+  const effectiveAppMode: AppMode = isEmployee ? appMode : "cheki";
+  const needsPasswordSetup =
+    authEnabled && Boolean(session) && (recoveryMode || session?.user.user_metadata?.password_set !== true);
+  const authRedirectUrl = getAuthRedirectUrl();
+
+  useEffect(() => {
+    if (taskTemplateSets.length === 0) {
+      if (selectedCreateTemplateId) setSelectedCreateTemplateId("");
+      return;
+    }
+    if (!taskTemplateSets.some((template) => template.id === selectedCreateTemplateId)) {
+      setSelectedCreateTemplateId(taskTemplateSets[0].id);
+    }
+  }, [selectedCreateTemplateId, taskTemplateSets]);
+
+  useEffect(() => {
+    if (!supabase || !authEnabled) return;
+
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setSession(data.session);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
+      setSession(nextSession);
+      if (!nextSession) {
+        setCurrentUserProfile(null);
+        setIsProfileLoading(false);
+        setUserProfiles([]);
+        setUserManagementMessage("");
+        setManagerSection("status");
+        setProjects([]);
+        setAppliedChekiShiftIds([]);
+        setIsDataReady(false);
+        setIsLoadingData(false);
+        lastSavedSnapshotRef.current = "";
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !authEnabled || !session || needsPasswordSetup) return;
+
+    let cancelled = false;
+    setIsProfileLoading(true);
+    setLoadError("");
+
+    ensureCurrentUserProfile(session.user.id, session.user.email ?? "")
+      .then((profile) => {
+        if (cancelled) return;
+        setCurrentUserProfile(profile);
+        setIsProfileLoading(false);
+        if (profile.status !== "active") {
+          setIsDataReady(false);
+          setIsLoadingData(false);
+          setProjects([]);
+          setAppliedChekiShiftIds([]);
+        }
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setCurrentUserProfile(null);
+        setIsProfileLoading(false);
+        setIsDataReady(false);
+        setLoadError(error.message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [needsPasswordSetup, session]);
+
+  useEffect(() => {
+    if (!supabase || !userId || needsPasswordSetup || !isApprovedUser) return;
+
+    let cancelled = false;
+    setIsLoadingData(true);
+    setLoadError("");
+
+    loadWorkspaceData(userId, userRole)
+      .then((data) => {
+        if (cancelled) return;
+
+        const nextGroups = data.groups.length > 0 ? data.groups : initialGroupPages;
+        const nextTaskTemplates = data.taskTemplateSets;
+        const nextRunTemplates =
+          data.runScheduleTemplateSets.length > 0
+            ? data.runScheduleTemplateSets
+            : [createDefaultRunScheduleTemplateSet()];
+        const nextProjects = data.projects.map((project) =>
+          clearGeneratedDefaultScheduleInfo(restoreCalendarLiveStatus(removeGeneratedTemplateTasks(project as LiveProject))),
+        );
+        const removedGeneratedTasks = data.projects.some(
+          (project, index) => project.tasks.length !== nextProjects[index].tasks.length,
+        );
+        const removedGeneratedScheduleInfo = data.projects.some((project, index) => {
+          const nextProject = nextProjects[index];
+          return (
+            project.ticketLaunch !== nextProject.ticketLaunch ||
+            project.rehearsal !== nextProject.rehearsal ||
+            project.photoShoot !== nextProject.photoShoot
+          );
+        });
+        const nextActiveGroup = nextGroups[0]?.name ?? initialGroupPages[0].name;
+        const nextProject =
+          nextProjects
+            .filter((project) => project.group === nextActiveGroup && project.status !== "完了")
+            .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())[0] ??
+          nextProjects
+            .filter((project) => project.group === nextActiveGroup)
+            .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())[0] ??
+          nextProjects[0];
+
+        setGroups(nextGroups as GroupPage[]);
+        setProjects(nextProjects);
+        setTaskTemplateSets(nextTaskTemplates as TaskTemplateSet[]);
+        setSelectedCreateTemplateId(nextTaskTemplates[0]?.id ?? "");
+        setRunScheduleTemplateSets(nextRunTemplates as RunScheduleTemplateSet[]);
+        setSelectedRunScheduleTemplateId(nextRunTemplates[0]?.id ?? "run-template-standard");
+        setAppliedChekiShiftIds(data.appliedChekiShiftIds);
+        setActiveGroup(nextActiveGroup);
+        setSelectedLiveId(nextProject?.id ?? "");
+        setSelectedManagerLiveId(nextProject?.id ?? "");
+        setNewLive((form) => ({
+          ...form,
+          group: nextActiveGroup,
+          manager: nextGroups[0]?.manager ?? form.manager,
+        }));
+        setIsDataReady(true);
+        setIsLoadingData(false);
+        setSaveStatus("保存済み");
+        const shouldSeedDatabase =
+          data.groups.length === 0 ||
+          data.runScheduleTemplateSets.length === 0 ||
+          removedGeneratedTasks ||
+          removedGeneratedScheduleInfo;
+        lastSavedSnapshotRef.current = shouldSeedDatabase ? "" : JSON.stringify({
+          groups: nextGroups,
+          projects: nextProjects,
+          taskTemplateSets: nextTaskTemplates,
+          runScheduleTemplateSets: nextRunTemplates,
+          appliedChekiShiftIds: data.appliedChekiShiftIds,
+        });
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setLoadError(error.message);
+        setIsLoadingData(false);
+        setIsDataReady(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isApprovedUser, needsPasswordSetup, userId, userRole]);
+
+  useEffect(() => {
+    if (!supabase || !userId || !isDataReady || isLoadingData || needsPasswordSetup || !isApprovedUser) return;
+
+    const snapshot = JSON.stringify({
+      groups,
+      projects,
+      taskTemplateSets,
+      runScheduleTemplateSets,
+      appliedChekiShiftIds,
+    });
+    if (lastSavedSnapshotRef.current === snapshot) return;
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+    setSaveStatus("保存中");
+    saveTimerRef.current = window.setTimeout(() => {
+      const savePromise = isEmployee
+        ? saveWorkspaceData(
+            {
+              groups,
+              projects,
+              taskTemplateSets,
+              runScheduleTemplateSets,
+              appliedChekiShiftIds,
+            },
+            userId,
+          )
+        : saveChekiApplications(userId, appliedChekiShiftIds);
+
+      savePromise
+        .then(() => {
+          lastSavedSnapshotRef.current = snapshot;
+          setSaveStatus("保存済み");
+        })
+        .catch((error: Error) => {
+          setSaveStatus("保存失敗");
+          setLoadError(error.message);
+        });
+    }, 700);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [
+    appliedChekiShiftIds,
+    groups,
+    isDataReady,
+    isLoadingData,
+    isApprovedUser,
+    isEmployee,
+    needsPasswordSetup,
+    projects,
+    runScheduleTemplateSets,
+    taskTemplateSets,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (!authEnabled || !isAdmin || !isApprovedUser) {
+      setUserProfiles([]);
+      return;
+    }
+
+    let cancelled = false;
+    loadUserProfiles()
+      .then((profiles) => {
+        if (!cancelled) setUserProfiles(profiles);
+      })
+      .catch((error: Error) => {
+        if (!cancelled) setUserManagementMessage(error.message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, isApprovedUser]);
+
+  async function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) return;
+    setAuthMessage("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+    setAuthPassword("");
+  }
+
+  async function signUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) return;
+    setAuthMessage("");
+
+    const email = authEmail.trim();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: authRedirectUrl,
+        data: {
+          password_set: false,
+        },
+      },
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage("確認メールを送信しました。メール内のリンクからパスワード設定へ進んでください。");
+  }
+
+  async function requestPasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) return;
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail.trim(), {
+      redirectTo: authRedirectUrl,
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage("パスワード再設定メールを送信しました。メール内のリンクから再設定してください。");
+  }
+
+  async function updatePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !session) return;
+    setAuthMessage("");
+
+    if (authPassword.length < 8) {
+      setAuthMessage("パスワードは8文字以上にしてください。");
+      return;
+    }
+    if (authPassword !== authPasswordConfirm) {
+      setAuthMessage("確認用パスワードが一致していません。");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    const { error } = await supabase.auth.updateUser({
+      password: authPassword,
+      data: {
+        ...session.user.user_metadata,
+        password_set: true,
+      },
+    });
+    setIsUpdatingPassword(false);
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setRecoveryMode(false);
+    setAuthPassword("");
+    setAuthPasswordConfirm("");
+    setAuthMessage("");
+    await supabase.auth.refreshSession();
+    const { data } = await supabase.auth.getSession();
+    setSession(data.session);
+  }
+
+  async function signOut() {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+  }
+
+  async function refreshUserProfiles() {
+    if (!isAdmin) return;
+    setUserManagementMessage("");
+    try {
+      setUserProfiles(await loadUserProfiles());
+    } catch (error) {
+      setUserManagementMessage(error instanceof Error ? error.message : "ユーザー一覧を取得できませんでした。");
+    }
+  }
+
+  async function changeUserProfile(userIdToUpdate: string, updates: Pick<AppUserProfile, "role" | "status">) {
+    if (!isAdmin) return;
+    if (userIdToUpdate === userId && (updates.role !== "admin" || updates.status !== "active")) {
+      setUserManagementMessage("自分自身を管理者・有効状態から外す操作はできません。");
+      return;
+    }
+
+    setUserManagementMessage("保存中");
+    try {
+      const updated = await updateUserProfile(userIdToUpdate, updates);
+      setUserProfiles((current) => current.map((profile) => (profile.id === updated.id ? updated : profile)));
+      if (updated.id === userId) setCurrentUserProfile(updated);
+      setUserManagementMessage("保存しました");
+    } catch (error) {
+      setUserManagementMessage(error instanceof Error ? error.message : "ユーザー情報を更新できませんでした。");
+    }
+  }
+
+  async function deleteManagedUserProfile(userIdToDelete: string) {
+    if (!isAdmin) return;
+    if (userIdToDelete === userId) {
+      setUserManagementMessage("自分自身は削除できません。");
+      return;
+    }
+
+    const profile = userProfiles.find((current) => current.id === userIdToDelete);
+    const label = profile?.email || "このユーザー";
+    if (!window.confirm(`${label} をユーザー管理から削除します。よろしいですか？`)) return;
+
+    setUserManagementMessage("削除中");
+    try {
+      await deleteUserProfile(userIdToDelete);
+      setUserProfiles((current) => current.filter((current) => current.id !== userIdToDelete));
+      setUserManagementMessage("削除しました");
+    } catch (error) {
+      setUserManagementMessage(error instanceof Error ? error.message : "ユーザーを削除できませんでした。");
+    }
+  }
 
   const groupProjects = useMemo(
     () =>
@@ -987,7 +1068,7 @@ function App() {
           time: "",
           title: "ライブ当日",
           liveTitle: project.title,
-          kind: "ライブ",
+          kind: inferCalendarLiveKind(project.title),
           liveId: project.id,
         },
       ];
@@ -1006,7 +1087,7 @@ function App() {
           taskStatus: task.status,
         }));
 
-      return [...milestoneItems, ...taskItems];
+      return [...milestoneItems.filter((item) => isIsoDate(item.date)), ...taskItems];
     }),
     ...externalCalendarItems,
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1014,17 +1095,25 @@ function App() {
   const liveListProjects = groupProjects.filter((project) =>
     liveListView === "完" ? project.status === "完了" : project.status !== "完了",
   );
-  const calendarLiveItems = externalCalendarItems
-    .filter((item) => item.kind === "カレンダー")
+  const unmanagedCalendarItems = externalCalendarItems
+    .filter((item) => isExternalCalendarLiveItem(item))
+    .filter((item) => {
+      const matchedProject = groupProjects.find((project) => isSameCalendarLive(project, item, activeGroup));
+      if (!matchedProject) return true;
+      const isFutureOrToday = toDate(item.date) >= today;
+      if (isFutureOrToday) return matchedProject.status === "完了";
+      return matchedProject.status !== "完了";
+    });
+  const calendarLiveItems = unmanagedCalendarItems
     .filter((item) => (liveListView === "完" ? toDate(item.date) < today : toDate(item.date) >= today))
     .sort((a, b) => `${a.date}${a.time}${a.title}`.localeCompare(`${b.date}${b.time}${b.title}`));
   const liveListCounts: Record<LiveListView, number> = {
     未:
       groupProjects.filter((project) => project.status !== "完了").length +
-      externalCalendarItems.filter((item) => item.kind === "カレンダー" && toDate(item.date) >= today).length,
+      unmanagedCalendarItems.filter((item) => toDate(item.date) >= today).length,
     完:
       groupProjects.filter((project) => project.status === "完了").length +
-      externalCalendarItems.filter((item) => item.kind === "カレンダー" && toDate(item.date) < today).length,
+      unmanagedCalendarItems.filter((item) => toDate(item.date) < today).length,
   };
   const selectedLive =
     groupProjects.find((project) => project.id === selectedLiveId) ?? groupProjects[0] ?? null;
@@ -1055,10 +1144,8 @@ function App() {
     taskRoleFilter === "全ロール"
       ? ownerFilteredTasks
       : ownerFilteredTasks.filter((task) => getTaskRole(task) === taskRoleFilter);
-  const ownerFilterOptions = ["全員", ...managers.filter((manager) => liveTasks.some((task) => task.owner === manager))];
-  const roleFilterOptions = taskRoleFilters.filter((role) =>
-    role === "全ロール" ? true : ownerFilteredTasks.some((task) => getTaskRole(task) === role),
-  );
+  const ownerFilterOptions = ["全員", ...managers];
+  const roleFilterOptions = taskRoleFilters;
 
   const visibleTasks = roleAndOwnerFilteredTasks
     .filter((task) => matchesTaskView(task, taskView))
@@ -1244,8 +1331,7 @@ function App() {
     event.preventDefault();
     const name = groupForm.name.trim();
     const manager = groupForm.manager.trim() || managers[0];
-    const photo =
-      groupForm.photo.trim() || `https://picsum.photos/seed/${encodeURIComponent(name)}/96/96`;
+    const photo = groupForm.photo.trim();
     const calendarUrl = groupForm.calendarUrl.trim();
     if (!name) {
       setGroupNotice("グループ名を入力してください。");
@@ -1263,7 +1349,7 @@ function App() {
       setGroups((current) =>
         current.map((group) =>
           group.name === editingGroupName
-            ? { name, manager, photo, calendarUrl: calendarUrl || undefined }
+            ? { ...group, name, manager, photo, calendarUrl: calendarUrl || undefined }
             : group,
         ),
       );
@@ -1287,7 +1373,7 @@ function App() {
       return;
     }
 
-    const nextGroup = { name, manager, photo, calendarUrl: calendarUrl || undefined };
+    const nextGroup = { id: `group-${crypto.randomUUID()}`, name, manager, photo, calendarUrl: calendarUrl || undefined };
     setGroups((current) => [...current, nextGroup]);
     setActiveGroup(name);
     setSelectedLiveId("");
@@ -1355,6 +1441,14 @@ function App() {
       ...project,
       tasks: project.tasks.map((task) => (task.id === taskId ? updateTaskStatusValue(task, status) : task)),
     }));
+  }
+
+  function deleteTask(projectId: string, taskId: string) {
+    updateProject(projectId, (project) => ({
+      ...project,
+      tasks: project.tasks.filter((task) => task.id !== taskId),
+    }));
+    setSelectedTaskKey((current) => (current === `${projectId}-${taskId}` ? null : current));
   }
 
   function toggleSubtask(projectId: string, taskId: string, subtaskId: string) {
@@ -1532,29 +1626,16 @@ function App() {
   }
 
   function openTemplateEditor() {
-    const template = selectedCreateTemplate ?? createDefaultTaskTemplateSet();
+    const template =
+      selectedCreateTemplate ??
+      createBlankTaskTemplateSet(selectedLive?.manager ?? activeGroupProfile?.manager ?? managers[0]);
     setTemplateDraft(cloneTaskTemplateSet(template));
     setIsDrawerOpen(false);
     setIsTemplateEditorOpen(true);
   }
 
   function startNewTemplateDraft() {
-    setTemplateDraft({
-      id: `template-${crypto.randomUUID()}`,
-      name: "",
-      liveType: "共通",
-      items: [
-        {
-          id: `template-item-${crypto.randomUUID()}`,
-          phase: "イベント",
-          title: "",
-          offset: -30,
-          owner: selectedLive?.manager ?? activeGroupProfile?.manager ?? managers[0],
-          priority: "通常",
-          subtasks: [],
-        },
-      ],
-    });
+    setTemplateDraft(createBlankTaskTemplateSet(selectedLive?.manager ?? activeGroupProfile?.manager ?? managers[0]));
   }
 
   function updateTemplateDraftItem(itemId: string, updates: Partial<TaskTemplateItem>) {
@@ -1619,13 +1700,116 @@ function App() {
     setIsTemplateEditorOpen(false);
   }
 
+  function applyTaskTemplateToSelectedLive() {
+    if (!selectedLive || !selectedCreateTemplate) return;
+
+    if (
+      selectedLive.tasks.length > 0 &&
+      !window.confirm("このライブにテンプレートのタスクを追加します。既存タスクは残します。よろしいですか？")
+    ) {
+      return;
+    }
+
+    updateProject(selectedLive.id, (project) => {
+      const existingTitles = new Set(project.tasks.map((task) => normalizeSearchText(task.title)));
+      const templateTasks = generateTasks(project.id, project.eventDate, selectedCreateTemplate.items).filter(
+        (task) => !existingTitles.has(normalizeSearchText(task.title)),
+      );
+
+      if (templateTasks.length === 0) return project;
+
+      return {
+        ...project,
+        tasks: [...project.tasks, ...templateTasks],
+      };
+    });
+    setTaskView("未着手");
+    setSelectedTaskKey(null);
+  }
+
+  function selectCalendarLive(item: CalendarItem) {
+    const draft = calendarItemToLiveDraft(item, activeGroup);
+    const existingProject = groupProjects.find(
+      (project) => isSameCalendarLive(project, item, activeGroup),
+    );
+
+    if (existingProject) {
+      const isPast = toDate(item.date) < today;
+      if (isPast && existingProject.status !== "完了") {
+        updateProject(existingProject.id, (project) => ({
+          ...project,
+          status: "完了",
+          sourceCalendarEventId: item.id,
+        }));
+        setLiveListView("完");
+      } else if (!isPast && existingProject.status === "完了") {
+        updateProject(existingProject.id, (project) => ({
+          ...project,
+          status: "計画",
+          sourceCalendarEventId: item.id,
+        }));
+        setLiveListView("未");
+      } else if (!existingProject.sourceCalendarEventId) {
+        updateProject(existingProject.id, (project) => ({
+          ...project,
+          sourceCalendarEventId: item.id,
+        }));
+      }
+      setSelectedLiveId(existingProject.id);
+      setTaskRoleFilter("全ロール");
+      setTaskOwnerFilter("全員");
+      setSelectedTaskKey(null);
+      setIsDrawerOpen(false);
+      return;
+    }
+
+    const profile = groups.find((group) => group.name === activeGroup);
+    const id = `live-${crypto.randomUUID()}`;
+    const manager = profile?.manager ?? managers[0];
+    const venue = draft.venue || "未設定";
+    const status: LiveStatus = toDate(item.date) < today ? "完了" : "計画";
+    const live: LiveProject = {
+      id,
+      group: activeGroup,
+      title: draft.title || item.title.trim(),
+      venue,
+      eventDate: item.date,
+      status,
+      manager,
+      liveType: draft.liveType,
+      ticketLaunch: "",
+      rehearsal: "",
+      photoShoot: "",
+      productionCompany: "未設定",
+      sourceCalendarEventId: item.id,
+      tasks: [],
+      tickets: [],
+      productionItems: [],
+      scheduleItems: [],
+    };
+
+    setProjects((current) => [live, ...current]);
+    setSelectedLiveId(live.id);
+    setTaskView("未着手");
+    setTaskRoleFilter("全ロール");
+    setTaskOwnerFilter("全員");
+    setSelectedTaskKey(null);
+    setIsTemplateEditorOpen(false);
+    setIsScheduleOpen(false);
+    setIsDrawerOpen(false);
+  }
+
   function createLive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!newLive.title.trim() || !newLive.venue.trim() || !newLive.eventDate) return;
 
     const id = `live-${crypto.randomUUID()}`;
-    const ticketLaunch = `${addDays(toDate(newLive.eventDate), -35)}T20:00`;
-    const tasks = generateTasks(id, newLive.eventDate, selectedCreateTemplate?.items);
+    const generatedTasks = selectedCreateTemplate
+      ? generateTasks(id, newLive.eventDate, selectedCreateTemplate.items)
+      : [];
+    const generatedScheduleItems = selectedRunScheduleTemplate
+      ? buildRunScheduleFromTemplate(id, selectedRunScheduleTemplate.items)
+      : [];
     const live: LiveProject = {
       id,
       group: activeGroup,
@@ -1635,16 +1819,14 @@ function App() {
       status: "計画",
       manager: newLive.manager,
       liveType: newLive.liveType,
-      ticketLaunch,
-      rehearsal: `${addDays(toDate(newLive.eventDate), -2)}T13:00 @ 未定`,
-      photoShoot: `${addDays(toDate(newLive.eventDate), -28)}T11:00 @ 未定`,
+      ticketLaunch: "",
+      rehearsal: "",
+      photoShoot: "",
       productionCompany: "未設定",
-      tasks,
-      tickets: defaultTickets(ticketLaunch, newLive.liveType),
-      productionItems: defaultProductionItems(newLive.eventDate),
-      scheduleItems: selectedRunScheduleTemplate
-        ? buildRunScheduleFromTemplate(id, selectedRunScheduleTemplate.items)
-        : defaultRunSchedule(id, newLive.eventDate, newLive.liveType, newLive.manager),
+      tasks: generatedTasks,
+      tickets: [],
+      productionItems: [],
+      scheduleItems: generatedScheduleItems,
     };
 
     setProjects((current) => [live, ...current]);
@@ -1659,29 +1841,95 @@ function App() {
     }));
   }
 
+  if (!isSupabaseConfigured && authEnabled) {
+    return <SetupScreen />;
+  }
+
+  if (authEnabled && !session) {
+    return (
+      <AuthScreen
+        email={authEmail}
+        message={authMessage}
+        password={authPassword}
+        view={authView}
+        onEmailChange={setAuthEmail}
+        onPasswordChange={setAuthPassword}
+        onRequestPasswordReset={requestPasswordReset}
+        onSignIn={signIn}
+        onSignUp={signUp}
+        onViewChange={(view) => {
+          setAuthView(view);
+          setAuthMessage("");
+          setAuthPassword("");
+        }}
+      />
+    );
+  }
+
+  if (authEnabled && needsPasswordSetup) {
+    return (
+      <PasswordSetupScreen
+        confirmPassword={authPasswordConfirm}
+        isSubmitting={isUpdatingPassword}
+        message={authMessage}
+        password={authPassword}
+        recoveryMode={recoveryMode}
+        onConfirmPasswordChange={setAuthPasswordConfirm}
+        onPasswordChange={setAuthPassword}
+        onSubmit={updatePassword}
+      />
+    );
+  }
+
+  if (authEnabled && isProfileLoading) {
+    return <LoadingScreen message="ユーザー権限を確認しています" />;
+  }
+
+  if (authEnabled && loadError && !currentUserProfile) {
+    return <AccessStatusScreen email={session?.user.email ?? ""} message={loadError} status="error" onSignOut={signOut} />;
+  }
+
+  if (authEnabled && currentUserProfile?.status !== "active") {
+    return (
+      <AccessStatusScreen
+        email={currentUserProfile?.email ?? session?.user.email ?? ""}
+        status={currentUserProfile?.status ?? "pending"}
+        onSignOut={signOut}
+      />
+    );
+  }
+
+  if (!isDataReady || isLoadingData) {
+    return <LoadingScreen message={loadError || "データを読み込んでいます"} />;
+  }
+
   return (
     <div className="app">
       <header className="topBar">
         <div className="modeSwitch" aria-label="表示切り替え">
+          {isEmployee && (
+            <>
+              <button
+                className={effectiveAppMode === "work" ? "active" : ""}
+                onClick={() => setAppMode("work")}
+                type="button"
+              >
+                作業
+              </button>
+              <button
+                className={effectiveAppMode === "manager" ? "active" : ""}
+                onClick={() => {
+                  setIsDrawerOpen(false);
+                  setAppMode("manager");
+                }}
+                type="button"
+              >
+                管理
+              </button>
+            </>
+          )}
           <button
-            className={appMode === "work" ? "active" : ""}
-            onClick={() => setAppMode("work")}
-            type="button"
-          >
-            作業
-          </button>
-          <button
-            className={appMode === "manager" ? "active" : ""}
-            onClick={() => {
-              setIsDrawerOpen(false);
-              setAppMode("manager");
-            }}
-            type="button"
-          >
-            管理
-          </button>
-          <button
-            className={appMode === "cheki" ? "active" : ""}
+            className={effectiveAppMode === "cheki" ? "active" : ""}
             onClick={() => {
               setIsDrawerOpen(false);
               setAppMode("cheki");
@@ -1693,10 +1941,13 @@ function App() {
         </div>
       </header>
 
-      <main className={appMode === "work" ? "groupPage" : "managerPage"}>
-        {appMode === "manager" ? (
+      <main className={effectiveAppMode === "work" ? "groupPage" : "managerPage"}>
+        {effectiveAppMode === "manager" ? (
           <ManagerView
             groups={groups}
+            currentUserId={userId ?? ""}
+            isAdmin={isAdmin}
+            managerSection={managerSection}
             managerContactFilter={managerContactFilter}
             managerGroupFilter={managerGroupFilter}
             managerRoleFilter={managerRoleFilter}
@@ -1706,12 +1957,22 @@ function App() {
             setManagerContactFilter={setManagerContactFilter}
             setManagerGroupFilter={setManagerGroupFilter}
             setManagerRoleFilter={setManagerRoleFilter}
+            setManagerSection={setManagerSection}
             setSelectedManagerIssueId={setSelectedManagerIssueId}
             setSelectedManagerLiveId={setSelectedManagerLiveId}
+            userManagementMessage={userManagementMessage}
+            userProfiles={userProfiles}
             onOpenIssue={openManagerIssue}
+            onUserProfileDelete={deleteManagedUserProfile}
+            onUserProfileChange={changeUserProfile}
           />
-        ) : appMode === "cheki" ? (
-          <ChekiStaffView groups={groups} projects={projects} />
+        ) : effectiveAppMode === "cheki" ? (
+          <ChekiStaffView
+            appliedShiftIds={appliedChekiShiftIds}
+            groups={groups}
+            projects={projects}
+            onAppliedShiftIdsChange={setAppliedChekiShiftIds}
+          />
         ) : (
         <section className="workGrid">
           <aside className="liveRail">
@@ -1838,7 +2099,7 @@ function App() {
                     />
                   ))}
                   {searchedCalendarLiveItems.map((item) => (
-                    <ExternalLiveCard item={item} key={item.id} />
+                    <ExternalLiveCard item={item} key={item.id} onSelect={() => selectCalendarLive(item)} />
                   ))}
                   {searchedProjects.length === 0 && searchedCalendarLiveItems.length === 0 && (
                     <div className="miniEmpty">表示するライブはありません</div>
@@ -1906,6 +2167,15 @@ function App() {
                       <button className="templateButton" onClick={openTemplateEditor} type="button">
                         <CopyPlus size={14} />
                         テンプレート
+                      </button>
+                      <button
+                        className="templateButton"
+                        disabled={!selectedLive || !selectedCreateTemplate}
+                        onClick={applyTaskTemplateToSelectedLive}
+                        type="button"
+                      >
+                        <Plus size={14} />
+                        読込
                       </button>
                       <label className="ownerSelect roleSelect">
                         <select
@@ -1986,6 +2256,7 @@ function App() {
                       }}
                       onToggle={() => toggleTask(task.liveId, task.id)}
                       onStatusChange={(status) => setTaskStatus(task.liveId, task.id, status)}
+                      onDelete={() => deleteTask(task.liveId, task.id)}
                       onSubtaskToggle={(subtaskId) => toggleSubtask(task.liveId, task.id, subtaskId)}
                       onSubtaskAdd={(title) => addSubtask(task.liveId, task.id, title)}
                     />
@@ -2021,6 +2292,9 @@ function App() {
                       onDeleteProductionItem={(itemId) => deleteProductionItem(selectedLive.id, itemId)}
                       onDeleteTicket={(ticketId) => deleteTicket(selectedLive.id, ticketId)}
                       onLiveStatusChange={(status) => setLiveStatus(selectedLive.id, status)}
+                      onLiveDetailChange={(updates) =>
+                        updateProject(selectedLive.id, (project) => ({ ...project, ...updates }))
+                      }
                       onDriveFolderUrlChange={(driveFolderUrl) =>
                         updateLiveDriveFolderUrl(selectedLive.id, driveFolderUrl)
                       }
@@ -2032,7 +2306,7 @@ function App() {
                   ) : (
                     <div className="emptyState liveEmptyState">
                       <CalendarDays size={24} />
-                      <span>このグループにはまだライブがありません</span>
+                      <span>左のライブ一覧からライブを選択してください</span>
                     </div>
                   )}
                 </section>
@@ -2062,22 +2336,28 @@ function App() {
                 </div>
 
                 <div className="templateTop">
-                  <label>
-                    <span>編集するテンプレート</span>
-                    <select
-                      value={templateDraft.id}
-                      onChange={(event) => {
-                        const template = taskTemplateSets.find((item) => item.id === event.target.value);
-                        if (template) setTemplateDraft(cloneTaskTemplateSet(template));
-                      }}
-                    >
-                      {taskTemplateSets.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {taskTemplateSets.length > 0 ? (
+                    <label>
+                      <span>編集するテンプレート</span>
+                      <select
+                        value={taskTemplateSets.some((template) => template.id === templateDraft.id) ? templateDraft.id : ""}
+                        onChange={(event) => {
+                          const template = taskTemplateSets.find((item) => item.id === event.target.value);
+                          if (template) setTemplateDraft(cloneTaskTemplateSet(template));
+                        }}
+                      >
+                        {taskTemplateSets.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <div className="templateEmptyNotice">
+                      まだタスクテンプレートはありません。新規で作成してください。
+                    </div>
+                  )}
                   <button className="secondaryButton" onClick={startNewTemplateDraft} type="button">
                     <Plus size={15} />
                     新規
@@ -2282,16 +2562,20 @@ function App() {
                 </div>
                 <label>
                   <span>タスクテンプレート</span>
-                  <select
-                    value={selectedCreateTemplateId}
-                    onChange={(event) => setSelectedCreateTemplateId(event.target.value)}
-                  >
-                    {taskTemplateSets.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name} / {template.liveType}
-                      </option>
-                    ))}
-                  </select>
+                  {taskTemplateSets.length > 0 ? (
+                    <select
+                      value={selectedCreateTemplateId}
+                      onChange={(event) => setSelectedCreateTemplateId(event.target.value)}
+                    >
+                      {taskTemplateSets.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name} / {template.liveType}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="emptySelectLike">テンプレートなし</div>
+                  )}
                 </label>
                 <label>
                   <span>進行表テンプレート</span>
@@ -2345,8 +2629,233 @@ function App() {
   );
 }
 
+function SetupScreen() {
+  return (
+    <section className="setupScreen">
+      <div className="setupCard">
+        <span>Setup required</span>
+        <h1>Supabaseの接続情報が未設定です</h1>
+        <p>
+          実運用では追加・削除・編集した内容をDBへ保存します。
+          `.env` に以下を設定してから起動してください。
+        </p>
+        <pre>{`VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_AUTH_ENABLED=true
+VITE_AUTH_REDIRECT_URL=http://127.0.0.1:5173/idle-task-manager/`}</pre>
+        <p>
+          先にSupabaseのSQL Editorで `supabase/schema.sql` を実行し、
+          AuthenticationのRedirect URLsに `VITE_AUTH_REDIRECT_URL` と同じURLを登録してください。
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function AuthScreen({
+  email,
+  message,
+  password,
+  view,
+  onEmailChange,
+  onPasswordChange,
+  onRequestPasswordReset,
+  onSignIn,
+  onSignUp,
+  onViewChange,
+}: {
+  email: string;
+  message: string;
+  password: string;
+  view: "signin" | "signup" | "reset";
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onRequestPasswordReset: (event: FormEvent<HTMLFormElement>) => void;
+  onSignIn: (event: FormEvent<HTMLFormElement>) => void;
+  onSignUp: (event: FormEvent<HTMLFormElement>) => void;
+  onViewChange: (view: "signin" | "signup" | "reset") => void;
+}) {
+  const isSignup = view === "signup";
+  const isReset = view === "reset";
+  const title = isSignup ? "新規登録" : isReset ? "パスワード再設定" : "ログイン";
+
+  return (
+    <section className="setupScreen">
+      <form className="setupCard authCard" onSubmit={isSignup ? onSignUp : isReset ? onRequestPasswordReset : onSignIn}>
+        <span>Live task manager</span>
+        <h1>{title}</h1>
+        {isSignup && (
+          <p>
+            メールアドレスを登録すると確認メールが届きます。パスワード設定後、管理者が権限を付与すると利用できます。
+          </p>
+        )}
+        {isReset && <p>登録済みメールアドレスへ、パスワード再設定用のリンクを送信します。</p>}
+        <label>
+          <span>メールアドレス</span>
+          <input
+            autoComplete="email"
+            value={email}
+            onChange={(event) => onEmailChange(event.target.value)}
+            type="email"
+            required
+          />
+        </label>
+        {!isSignup && !isReset && (
+          <label>
+            <span>パスワード</span>
+            <input
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+              type="password"
+              required
+            />
+          </label>
+        )}
+        {message && <p className="authError">{message}</p>}
+        <button className="primaryButton full" type="submit">
+          {isSignup ? "確認メールを送信" : isReset ? "再設定メールを送信" : "ログイン"}
+        </button>
+        <div className="authLinks">
+          {view !== "signin" && (
+            <button onClick={() => onViewChange("signin")} type="button">
+              ログインへ戻る
+            </button>
+          )}
+          {view !== "signup" && (
+            <button onClick={() => onViewChange("signup")} type="button">
+              新規登録
+            </button>
+          )}
+          {view !== "reset" && (
+            <button onClick={() => onViewChange("reset")} type="button">
+              パスワードを忘れた
+            </button>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function PasswordSetupScreen({
+  confirmPassword,
+  isSubmitting,
+  message,
+  password,
+  recoveryMode,
+  onConfirmPasswordChange,
+  onPasswordChange,
+  onSubmit,
+}: {
+  confirmPassword: string;
+  isSubmitting: boolean;
+  message: string;
+  password: string;
+  recoveryMode: boolean;
+  onConfirmPasswordChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <section className="setupScreen">
+      <form className="setupCard authCard" onSubmit={onSubmit}>
+        <span>{recoveryMode ? "Password reset" : "Password setup"}</span>
+        <h1>{recoveryMode ? "新しいパスワードを設定" : "パスワードを設定"}</h1>
+        <p>次回以降はメールアドレスとこのパスワードでログインできます。</p>
+        <label>
+          <span>新しいパスワード</span>
+          <input
+            autoComplete="new-password"
+            minLength={8}
+            value={password}
+            onChange={(event) => onPasswordChange(event.target.value)}
+            type="password"
+            required
+          />
+        </label>
+        <label>
+          <span>確認用パスワード</span>
+          <input
+            autoComplete="new-password"
+            minLength={8}
+            value={confirmPassword}
+            onChange={(event) => onConfirmPasswordChange(event.target.value)}
+            type="password"
+            required
+          />
+        </label>
+        {message && <p className="authError">{message}</p>}
+        <button className="primaryButton full" disabled={isSubmitting} type="submit">
+          {isSubmitting ? "設定中" : "設定する"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function AccessStatusScreen({
+  email,
+  message,
+  status,
+  onSignOut,
+}: {
+  email: string;
+  message?: string;
+  status: AppUserStatus | "error";
+  onSignOut: () => void;
+}) {
+  const title =
+    status === "active"
+      ? "利用できます"
+      : status === "suspended"
+        ? "利用停止中です"
+        : status === "error"
+          ? "権限確認に失敗しました"
+          : "承認待ちです";
+  const body =
+    status === "suspended"
+      ? "このアカウントは現在利用停止中です。管理者に確認してください。"
+      : status === "error"
+        ? message || "ユーザー権限を確認できませんでした。"
+        : "管理者がユーザー管理画面でロールと利用状態を設定すると、アプリを利用できます。";
+
+  return (
+    <section className="setupScreen">
+      <div className="setupCard authCard">
+        <span>Account status</span>
+        <h1>{title}</h1>
+        <p>{body}</p>
+        {email && (
+          <div className="accountEmail">
+            <span>ログイン中</span>
+            <strong>{email}</strong>
+          </div>
+        )}
+        <button className="secondaryButton full" onClick={onSignOut} type="button">
+          ログアウト
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <section className="setupScreen">
+      <div className="setupCard">
+        <span>Loading</span>
+        <h1>{message}</h1>
+      </div>
+    </section>
+  );
+}
+
 function ManagerView({
   groups,
+  currentUserId,
+  isAdmin,
+  managerSection,
   managerContactFilter,
   managerGroupFilter,
   managerRoleFilter,
@@ -2356,11 +2865,19 @@ function ManagerView({
   setManagerContactFilter,
   setManagerGroupFilter,
   setManagerRoleFilter,
+  setManagerSection,
   setSelectedManagerIssueId,
   setSelectedManagerLiveId,
+  userManagementMessage,
+  userProfiles,
   onOpenIssue,
+  onUserProfileDelete,
+  onUserProfileChange,
 }: {
   groups: GroupPage[];
+  currentUserId: string;
+  isAdmin: boolean;
+  managerSection: "status" | "users";
   managerContactFilter: string;
   managerGroupFilter: string;
   managerRoleFilter: TaskRoleFilter;
@@ -2370,9 +2887,14 @@ function ManagerView({
   setManagerContactFilter: (value: string | ((current: string) => string)) => void;
   setManagerGroupFilter: (value: string) => void;
   setManagerRoleFilter: (value: TaskRoleFilter) => void;
+  setManagerSection: (value: "status" | "users") => void;
   setSelectedManagerIssueId: (value: string | ((current: string) => string)) => void;
   setSelectedManagerLiveId: (value: string) => void;
+  userManagementMessage: string;
+  userProfiles: AppUserProfile[];
   onOpenIssue: (issue: ManagerIssue) => void;
+  onUserProfileDelete: (userId: string) => void;
+  onUserProfileChange: (userId: string, updates: Pick<AppUserProfile, "role" | "status">) => void;
 }) {
   const issues = useMemo(() => createManagerIssues(projects), [projects]);
   const activeProjects = useMemo(
@@ -2501,6 +3023,33 @@ function ManagerView({
 
   return (
     <section className="managerView liveManagerView">
+      {isAdmin && (
+        <div className="managerModeTabs">
+          <button
+            className={managerSection === "status" ? "active" : ""}
+            onClick={() => setManagerSection("status")}
+            type="button"
+          >
+            ライブ状況
+          </button>
+          <button
+            className={managerSection === "users" ? "active" : ""}
+            onClick={() => setManagerSection("users")}
+            type="button"
+          >
+            ユーザー管理
+          </button>
+        </div>
+      )}
+      {isAdmin && managerSection === "users" ? (
+        <UserManagementView
+          currentUserId={currentUserId}
+          message={userManagementMessage}
+          profiles={userProfiles}
+          onUserProfileDelete={onUserProfileDelete}
+          onUserProfileChange={onUserProfileChange}
+        />
+      ) : (
       <div className="liveManagerGrid">
         <section className="managerPanel liveBoardPanel">
           <div className="managerPanelHead managerBoardHead">
@@ -2714,20 +3263,136 @@ function ManagerView({
           )}
         </section>
       </div>
+      )}
+    </section>
+  );
+}
+
+function UserManagementView({
+  currentUserId,
+  message,
+  profiles,
+  onUserProfileDelete,
+  onUserProfileChange,
+}: {
+  currentUserId: string;
+  message: string;
+  profiles: AppUserProfile[];
+  onUserProfileDelete: (userId: string) => void;
+  onUserProfileChange: (userId: string, updates: Pick<AppUserProfile, "role" | "status">) => void;
+}) {
+  const pendingCount = profiles.filter((profile) => profile.status === "pending").length;
+  const activeCount = profiles.filter((profile) => profile.status === "active").length;
+  const chekiCount = profiles.filter((profile) => profile.status === "active" && profile.role === "cheki").length;
+
+  return (
+    <section className="managerPanel userAdminPanel">
+      <div className="managerPanelHead userAdminHead">
+        <div>
+          <h3>ユーザー管理</h3>
+          <span>登録済みユーザーの利用状態とロールを管理します</span>
+        </div>
+      </div>
+
+      <div className="userAdminSummary">
+        <div>
+          <b>{pendingCount}</b>
+          <span>承認待ち</span>
+        </div>
+        <div>
+          <b>{activeCount}</b>
+          <span>利用中</span>
+        </div>
+        <div>
+          <b>{chekiCount}</b>
+          <span>チェキスタッフ</span>
+        </div>
+      </div>
+
+      {message && <p className="userAdminMessage">{message}</p>}
+
+      <div className="userAdminList">
+        {profiles.map((profile) => {
+          const isSelf = profile.id === currentUserId;
+          return (
+            <article className={`userAdminRow status-${profile.status}`} key={profile.id}>
+              <div className="userAdminIdentity">
+                <strong>{profile.email || "メール未設定"}</strong>
+                <span>
+                  {profile.displayName || "名前未設定"} / {formatDate(profile.createdAt)}
+                </span>
+              </div>
+              <label>
+                <span>ロール</span>
+                <select
+                  disabled={isSelf}
+                  value={profile.role}
+                  onChange={(event) =>
+                    onUserProfileChange(profile.id, {
+                      role: event.target.value as AppUserRole,
+                      status: profile.status,
+                    })
+                  }
+                >
+                  <option value="admin">管理者</option>
+                  <option value="employee">社員</option>
+                  <option value="cheki">チェキスタッフ</option>
+                </select>
+              </label>
+              <label>
+                <span>状態</span>
+                <select
+                  disabled={isSelf}
+                  value={profile.status}
+                  onChange={(event) =>
+                    onUserProfileChange(profile.id, {
+                      role: profile.role,
+                      status: event.target.value as AppUserStatus,
+                    })
+                  }
+                >
+                  <option value="pending">承認待ち</option>
+                  <option value="active">有効</option>
+                  <option value="suspended">停止</option>
+                </select>
+              </label>
+              <div className="userAdminStatus">
+                <StatusPill value={userStatusLabel(profile.status)} />
+                {isSelf && <small>自分自身</small>}
+              </div>
+              <div className="userAdminActions">
+                <button
+                  aria-label="ユーザーを削除"
+                  disabled={isSelf}
+                  onClick={() => onUserProfileDelete(profile.id)}
+                  type="button"
+                >
+                  <Trash2 size={14} />
+                  削除
+                </button>
+              </div>
+            </article>
+          );
+        })}
+        {profiles.length === 0 && <div className="managerEmpty">ユーザーはまだ登録されていません</div>}
+      </div>
     </section>
   );
 }
 
 function ChekiStaffView({
+  appliedShiftIds,
   groups,
+  onAppliedShiftIdsChange,
   projects,
 }: {
+  appliedShiftIds: string[];
   groups: GroupPage[];
+  onAppliedShiftIdsChange: (value: string[] | ((current: string[]) => string[])) => void;
   projects: LiveProject[];
 }) {
   const [groupFilter, setGroupFilter] = useState("全グループ");
   const [statusFilter, setStatusFilter] = useState<"募集中" | "応募済み" | "確定" | "全て">("募集中");
-  const [appliedShiftIds, setAppliedShiftIds] = useState<string[]>([]);
   const [pendingChekiAction, setPendingChekiAction] = useState<{
     type: "apply" | "cancel";
     shift: ChekiShift;
@@ -2739,6 +3404,9 @@ function ChekiStaffView({
   }));
   const groupFilteredShifts = shiftsWithApplication.filter(
     (shift) => groupFilter === "全グループ" || shift.group === groupFilter,
+  );
+  const sortedGroupShifts = [...groupFilteredShifts].sort((a, b) =>
+    `${a.date}${a.timeRange}${a.liveTitle}`.localeCompare(`${b.date}${b.timeRange}${b.liveTitle}`),
   );
   const chekiDateStatuses = useMemo(
     () =>
@@ -2760,7 +3428,12 @@ function ChekiStaffView({
     .filter((shift) => statusFilter === "全て" || shift.status === statusFilter)
     .sort((a, b) => `${a.date}${a.timeRange}${a.liveTitle}`.localeCompare(`${b.date}${b.timeRange}${b.liveTitle}`));
   const [selectedShiftId, setSelectedShiftId] = useState("");
-  const selectedShift = visibleShifts.find((shift) => shift.id === selectedShiftId) ?? visibleShifts[0];
+  const [selectedChekiDate, setSelectedChekiDate] = useState("");
+  const selectedShift =
+    sortedGroupShifts.find((shift) => shift.id === selectedShiftId) ?? visibleShifts[0] ?? sortedGroupShifts[0];
+  const activeChekiDate = selectedChekiDate || selectedShift?.date || toIsoDate(today);
+  const selectedDateShifts = sortedGroupShifts.filter((shift) => shift.date === activeChekiDate);
+  const detailShifts = selectedDateShifts.length > 0 ? selectedDateShifts : selectedShift ? [selectedShift] : [];
   const ownShifts = shiftsWithApplication
     .filter((shift) => shift.status === "確定" || appliedShiftIds.includes(shift.id))
     .sort((a, b) => `${a.date}${a.timeRange}${a.liveTitle}`.localeCompare(`${b.date}${b.timeRange}${b.liveTitle}`));
@@ -2771,14 +3444,28 @@ function ChekiStaffView({
   const confirmedCount = shiftsWithApplication.filter((shift) => shift.status === "確定").length;
 
   useEffect(() => {
-    if (!visibleShifts.length) {
+    if (!sortedGroupShifts.length) {
       setSelectedShiftId("");
+      setSelectedChekiDate("");
       return;
     }
-    if (!visibleShifts.some((shift) => shift.id === selectedShiftId)) {
-      setSelectedShiftId(visibleShifts[0].id);
+    if (selectedChekiDate && !sortedGroupShifts.some((shift) => shift.date === selectedChekiDate)) {
+      const nextShift = visibleShifts[0] ?? sortedGroupShifts[0];
+      setSelectedChekiDate(nextShift.date);
+      setSelectedShiftId(nextShift.id);
+      return;
     }
-  }, [selectedShiftId, visibleShifts]);
+    if (!sortedGroupShifts.some((shift) => shift.id === selectedShiftId)) {
+      const nextShift =
+        sortedGroupShifts.find((shift) => shift.date === selectedChekiDate) ?? visibleShifts[0] ?? sortedGroupShifts[0];
+      setSelectedShiftId(nextShift.id);
+      if (!selectedChekiDate) {
+        setSelectedChekiDate(nextShift.date);
+      }
+    } else if (!selectedChekiDate) {
+      setSelectedChekiDate(selectedShift?.date ?? sortedGroupShifts[0].date);
+    }
+  }, [selectedChekiDate, selectedShift?.date, selectedShiftId, sortedGroupShifts, visibleShifts]);
 
   useEffect(() => {
     if (!ownShifts.length) {
@@ -2791,11 +3478,19 @@ function ChekiStaffView({
   }, [ownShifts, selectedOwnShiftId]);
 
   const applyShift = (shiftId: string) => {
-    setAppliedShiftIds((current) => (current.includes(shiftId) ? current : [...current, shiftId]));
+    const targetShift = shiftsWithApplication.find((shift) => shift.id === shiftId);
+    if (!targetShift) return;
+    onAppliedShiftIdsChange((current) => {
+      if (current.includes(shiftId)) return current;
+      const hasSameDayApplication = shiftsWithApplication.some(
+        (shift) => shift.date === targetShift.date && current.includes(shift.id),
+      );
+      return hasSameDayApplication ? current : [...current, shiftId];
+    });
   };
 
   const cancelShift = (shiftId: string) => {
-    setAppliedShiftIds((current) => current.filter((id) => id !== shiftId));
+    onAppliedShiftIdsChange((current) => current.filter((id) => id !== shiftId));
   };
 
   const confirmChekiAction = () => {
@@ -2808,13 +3503,93 @@ function ChekiStaffView({
     setPendingChekiAction(null);
   };
 
+  const renderChekiShiftDetail = (shift: ChekiShift) => {
+    const isApplied = appliedShiftIds.includes(shift.id);
+    const hasOtherSameDayApplication = shiftsWithApplication.some(
+      (current) => current.date === shift.date && current.id !== shift.id && appliedShiftIds.includes(current.id),
+    );
+    const cannotApply = shift.status !== "募集中" || hasOtherSameDayApplication;
+    return (
+      <article
+        className={`chekiDetailCard ${selectedShift?.id === shift.id ? "selected" : ""}`}
+        key={shift.id}
+        onClick={() => setSelectedShiftId(shift.id)}
+      >
+        <div className="chekiDetailHead">
+          <div>
+            <span>{shift.group}</span>
+            <h3>{shift.liveTitle}</h3>
+          </div>
+          <StatusPill value={shift.status} />
+        </div>
+
+        <div className="chekiInfoGrid compact">
+          <span>
+            <CalendarDays size={15} />
+            日程 <strong>{formatDate(shift.date)}</strong>
+          </span>
+          <span>
+            <Clock3 size={15} />
+            時間 <strong>{shift.timeRange}</strong>
+          </span>
+          <span>
+            <UserRound size={15} />
+            募集 <strong>{shift.assignedCount}/{shift.requiredCount}名</strong>
+          </span>
+          <span>
+            <Sparkles size={15} />
+            場所 <strong>{shift.venue}</strong>
+          </span>
+          <span className="cancelRule">
+            <CircleAlert size={15} />
+            キャンセル <strong>{shift.cancelUntil}まで</strong>
+          </span>
+        </div>
+
+        <div className="chekiDetailBox">
+          <strong>担当内容</strong>
+          <p>{shift.role}</p>
+        </div>
+        <div className="chekiDetailBox">
+          <strong>メモ</strong>
+          <p>{shift.memo}</p>
+        </div>
+
+        {isApplied ? (
+          <button
+            className="chekiCancelButton"
+            onClick={() => setPendingChekiAction({ type: "cancel", shift })}
+            type="button"
+          >
+            <X size={16} />
+            応募をキャンセル
+          </button>
+        ) : (
+          <button
+            className="chekiApplyButton"
+            disabled={cannotApply}
+            onClick={() => setPendingChekiAction({ type: "apply", shift })}
+            type="button"
+          >
+            {cannotApply ? <Check size={16} /> : <Send size={16} />}
+            {hasOtherSameDayApplication
+              ? "同日に応募済み"
+              : shift.status === "募集中"
+                ? "この枠に応募する"
+                : `${shift.status}です`}
+          </button>
+        )}
+      </article>
+    );
+  };
+
   return (
     <section className="chekiView">
       <section className="chekiHero">
         <div>
           <span>Cheki staff portal</span>
           <h2>チェキスタッフ募集</h2>
-          <p>今後はログインしたチェキスタッフをこの画面へ自動遷移させる想定です。現時点ではUI確認用の仮画面です。</p>
+          <p>募集中のライブを確認し、参加できる枠へ応募できます。応募状態はログインユーザーごとに保存されます。</p>
         </div>
         <div className="chekiStats">
           <div>
@@ -2836,7 +3611,7 @@ function ChekiStaffView({
         <section className="chekiPanel chekiBoard">
           <ChekiLiveCalendar
             dateStatuses={chekiDateStatuses}
-            selectedDate={selectedShift?.date ?? toIsoDate(today)}
+            selectedDate={activeChekiDate}
             onSelectDate={(date) => {
               const nextShift = visibleShifts.find((shift) => shift.date === date)
                 ?? groupFilteredShifts.find((shift) => shift.date === date);
@@ -2844,6 +3619,7 @@ function ChekiStaffView({
               if (statusFilter !== "全て" && nextShift.status !== statusFilter) {
                 setStatusFilter("全て");
               }
+              setSelectedChekiDate(date);
               setSelectedShiftId(nextShift.id);
             }}
           />
@@ -2876,7 +3652,10 @@ function ChekiStaffView({
               <button
                 className={`chekiShiftCard ${selectedShift?.id === shift.id ? "selected" : ""}`}
                 key={shift.id}
-                onClick={() => setSelectedShiftId(shift.id)}
+                onClick={() => {
+                  setSelectedChekiDate(shift.date);
+                  setSelectedShiftId(shift.id);
+                }}
                 type="button"
               >
                 <div className="chekiShiftTitle">
@@ -2898,72 +3677,23 @@ function ChekiStaffView({
         </section>
 
         <section className="chekiPanel chekiDetail">
-          {selectedShift ? (
+          {detailShifts.length > 0 ? (
             <>
-              <div className="chekiDetailHead">
+              <div className="chekiDayHead">
                 <div>
-                  <span>{selectedShift.group}</span>
-                  <h3>{selectedShift.liveTitle}</h3>
+                  <span>選択日</span>
+                  <h3>{formatDate(activeChekiDate)}</h3>
                 </div>
-                <StatusPill value={selectedShift.status} />
+                <span>{detailShifts.length}件</span>
               </div>
 
-              <div className="chekiInfoGrid compact">
-                <span>
-                  <CalendarDays size={15} />
-                  日程 <strong>{formatDate(selectedShift.date)}</strong>
-                </span>
-                <span>
-                  <Clock3 size={15} />
-                  時間 <strong>{selectedShift.timeRange}</strong>
-                </span>
-                <span>
-                  <UserRound size={15} />
-                  募集 <strong>{selectedShift.assignedCount}/{selectedShift.requiredCount}名</strong>
-                </span>
-                <span>
-                  <Sparkles size={15} />
-                  場所 <strong>{selectedShift.venue}</strong>
-                </span>
-                <span className="cancelRule">
-                  <CircleAlert size={15} />
-                  キャンセル <strong>{selectedShift.cancelUntil}まで</strong>
-                </span>
+              <div className="chekiDetailList">
+                {detailShifts.map((shift) => renderChekiShiftDetail(shift))}
               </div>
-
-              <div className="chekiDetailBox">
-                <strong>担当内容</strong>
-                <p>{selectedShift.role}</p>
-              </div>
-              <div className="chekiDetailBox">
-                <strong>メモ</strong>
-                <p>{selectedShift.memo}</p>
-              </div>
-
-              {appliedShiftIds.includes(selectedShift.id) ? (
-                <button
-                  className="chekiCancelButton"
-                  onClick={() => setPendingChekiAction({ type: "cancel", shift: selectedShift })}
-                  type="button"
-                >
-                  <X size={16} />
-                  応募をキャンセル
-                </button>
-              ) : (
-                <button
-                  className="chekiApplyButton"
-                  disabled={selectedShift.status !== "募集中"}
-                  onClick={() => setPendingChekiAction({ type: "apply", shift: selectedShift })}
-                  type="button"
-                >
-                  {selectedShift.status === "募集中" ? <Send size={16} /> : <Check size={16} />}
-                  {selectedShift.status === "募集中" ? "この枠に応募する" : `${selectedShift.status}です`}
-                </button>
-              )}
 
               <div className="chekiNextNote">
-                <strong>今後の接続予定</strong>
-                <span>ログインユーザー判定、LINE募集文の自動作成、応募状況の保存、Googleカレンダー空き確認をここに接続します。</span>
+                <strong>応募後の流れ</strong>
+                <span>担当者が応募状況を確認し、確定後に集合時間や詳細を共有します。</span>
               </div>
             </>
           ) : (
@@ -2974,7 +3704,7 @@ function ChekiStaffView({
         <section className="chekiPanel chekiSchedule">
           <div className="chekiPanelHead">
             <h3>自分の予定</h3>
-            <span>仮表示</span>
+            <span>応募・確定</span>
           </div>
           <div className="chekiConfirmedList">
             {ownShifts.slice(0, 6).map((shift) => (
@@ -3055,9 +3785,7 @@ function createChekiShifts(projects: LiveProject[]): ChekiShift[] {
     .slice(0, 14)
     .map((project, index) => {
       const requiredCount = project.liveType === "ワンマン" ? 6 : project.liveType === "生誕祭" ? 5 : 3;
-      const assignedCount = Math.min(requiredCount, (index % 4) + 1);
-      const status: ChekiShift["status"] =
-        index % 5 === 0 ? "確定" : assignedCount >= requiredCount ? "応募済み" : "募集中";
+      const assignedCount = 0;
       return {
         id: `cheki-${project.id}`,
         liveId: project.id,
@@ -3069,7 +3797,7 @@ function createChekiShifts(projects: LiveProject[]): ChekiShift[] {
         role: "チェキ列整理、撮影補助、販売導線の案内、終演後の物販撤収補助",
         requiredCount,
         assignedCount,
-        status,
+        status: "募集中",
         cancelUntil: formatDate(addDays(toDate(project.eventDate), -3)),
         meetingTime: project.liveType === "ワンマン" ? "16:00" : "17:30",
         meetingPlace: `${project.venue} 入口付近`,
@@ -3288,6 +4016,12 @@ function riskLabel(risk: string) {
   return "順調";
 }
 
+function userStatusLabel(status: AppUserStatus) {
+  if (status === "active") return "有効";
+  if (status === "suspended") return "停止";
+  return "承認待ち";
+}
+
 function contactBreakdown(issues: ManagerIssue[], fallback: string): ManagerContact[] {
   void fallback;
   if (issues.length === 0) return [];
@@ -3399,7 +4133,11 @@ function GroupList({
               onClick={() => onSelect(group.name)}
               type="button"
             >
-              <img alt="" className="groupPhoto" src={group.photo} />
+              {group.photo ? (
+                <img alt="" className="groupPhoto" src={group.photo} />
+              ) : (
+                <span className="groupPhoto groupPhotoFallback">{group.name.slice(0, 1)}</span>
+              )}
               <strong>{group.name}</strong>
               {lateCount > 0 && <em>{lateCount}</em>}
             </button>
@@ -3520,6 +4258,7 @@ function TaskRow({
   onSelectLive,
   onToggle,
   onStatusChange,
+  onDelete,
   onSubtaskToggle,
   onSubtaskAdd,
 }: {
@@ -3528,6 +4267,7 @@ function TaskRow({
   onSelectLive: () => void;
   onToggle: () => void;
   onStatusChange: (status: TaskStatus) => void;
+  onDelete: () => void;
   onSubtaskToggle: (subtaskId: string) => void;
   onSubtaskAdd: (title: string) => void;
 }) {
@@ -3583,6 +4323,9 @@ function TaskRow({
           </select>
           <ChevronDown size={14} />
         </label>
+        <button className="taskDeleteButton" onClick={onDelete} type="button" aria-label="タスクを削除">
+          <Trash2 size={14} />
+        </button>
       </div>
       {selected && (
         <div className="subtaskPanel">
@@ -3625,6 +4368,7 @@ function LiveCard({
   onSelect: () => void;
 }) {
   const late = project.tasks.filter(isLate).length;
+  const listStatus = project.status === "完了" ? "完了" : late > 0 ? "遅延" : null;
   return (
     <button className={`liveCard ${selected ? "selected" : ""}`} onClick={onSelect} type="button">
       <div>
@@ -3632,19 +4376,21 @@ function LiveCard({
         <span>@{project.venue}</span>
       </div>
       <div className="liveCardMeta">
-        <StatusPill value={project.status === "完了" ? "完了" : late > 0 ? "遅延" : project.status} />
+        {listStatus && <StatusPill value={listStatus} />}
         <b>{formatDate(project.eventDate)}</b>
       </div>
-      <ProgressBar value={completion(project.tasks)} />
     </button>
   );
 }
 
-function ExternalLiveCard({ item }: { item: CalendarItem }) {
+function ExternalLiveCard({ item, onSelect }: { item: CalendarItem; onSelect: () => void }) {
+  const hasVenue = Boolean(item.liveTitle && item.liveTitle !== "休み");
+
   return (
-    <button className="liveCard externalLiveCard" type="button">
+    <button className="liveCard externalLiveCard" onClick={onSelect} type="button">
       <div>
         <strong>{item.title}</strong>
+        {hasVenue && <span>@{item.liveTitle}</span>}
       </div>
       <div className="liveCardMeta">
         <b>
@@ -3663,6 +4409,7 @@ function LiveSummary({
   onDeleteProductionItem,
   onDeleteTicket,
   onDriveFolderUrlChange,
+  onLiveDetailChange,
   onLiveStatusChange,
   onTicketChange,
   onProductionItemChange,
@@ -3673,6 +4420,7 @@ function LiveSummary({
   onDeleteProductionItem: (itemId: string) => void;
   onDeleteTicket: (ticketId: string) => void;
   onDriveFolderUrlChange: (driveFolderUrl: string) => void;
+  onLiveDetailChange: (updates: Partial<Pick<LiveProject, "ticketLaunch" | "rehearsal" | "photoShoot" | "productionCompany">>) => void;
   onLiveStatusChange: (status: LiveStatus) => void;
   onTicketChange: (ticketId: string, updates: Partial<TicketPlan>) => void;
   onProductionItemChange: (itemId: string, updates: Partial<ProductionItem>) => void;
@@ -3741,6 +4489,14 @@ function LiveSummary({
         ]}
       />
 
+      <LiveScheduleFields
+        photoShoot={project.photoShoot}
+        productionCompany={project.productionCompany}
+        rehearsal={project.rehearsal}
+        ticketLaunch={project.ticketLaunch}
+        onChange={onLiveDetailChange}
+      />
+
       <DriveFolderField
         url={project.driveFolderUrl ?? ""}
         onChange={onDriveFolderUrlChange}
@@ -3760,6 +4516,60 @@ function LiveSummary({
         onProductionItemChange={onProductionItemChange}
       />
     </div>
+  );
+}
+
+function LiveScheduleFields({
+  photoShoot,
+  productionCompany,
+  rehearsal,
+  ticketLaunch,
+  onChange,
+}: {
+  photoShoot: string;
+  productionCompany: string;
+  rehearsal: string;
+  ticketLaunch: string;
+  onChange: (updates: Partial<Pick<LiveProject, "ticketLaunch" | "rehearsal" | "photoShoot" | "productionCompany">>) => void;
+}) {
+  return (
+    <CompactSection icon={<CalendarDays size={15} />} title="日程メモ">
+      <div className="liveScheduleFields">
+        <label>
+          <span>チケット発売</span>
+          <input
+            aria-label="チケット発売"
+            type="datetime-local"
+            value={toDateTimeLocalInput(ticketLaunch)}
+            onChange={(event) => onChange({ ticketLaunch: event.target.value })}
+          />
+        </label>
+        <label>
+          <span>ゲネプロ</span>
+          <input
+            aria-label="ゲネプロ"
+            value={rehearsal}
+            onChange={(event) => onChange({ rehearsal: event.target.value })}
+          />
+        </label>
+        <label>
+          <span>撮影</span>
+          <input
+            aria-label="撮影"
+            value={photoShoot}
+            onChange={(event) => onChange({ photoShoot: event.target.value })}
+          />
+        </label>
+        <label>
+          <span>制作会社</span>
+          <input
+            aria-label="制作会社"
+            value={productionCompany === "未設定" ? "" : productionCompany}
+            onChange={(event) => onChange({ productionCompany: event.target.value.trim() || "未設定" })}
+          />
+        </label>
+      </div>
+    </CompactSection>
   );
 }
 
@@ -5198,9 +6008,9 @@ function CalendarPanel({
       </div>
       <div className="calendarLegend">
         {[
-          ["live", "ライブ"],
+          ["host", "主催"],
+          ["battle", "対バン"],
           ["ticket", "チケット"],
-          ["external", "Googleカレンダー"],
           ["holiday", "祝日"],
           ["task", "タスク"],
           ["prep", "ゲネ/撮影"],
@@ -5215,7 +6025,7 @@ function CalendarPanel({
 }
 
 function summarizeCalendarDay(items: CalendarItem[]) {
-  return items.reduce<Array<{ kind: string; count: number }>>((groups, item) => {
+  return items.filter((item) => item.kind !== "祝日").reduce<Array<{ kind: string; count: number }>>((groups, item) => {
     const found = groups.find((group) => group.kind === item.kind);
     if (found) {
       found.count += 1;
@@ -5223,6 +6033,77 @@ function summarizeCalendarDay(items: CalendarItem[]) {
     }
     return [...groups, { kind: item.kind, count: 1 }];
   }, []);
+}
+
+function calendarItemToLiveDraft(item: CalendarItem, groupName: string): Pick<NewLiveForm, "title" | "venue" | "liveType"> {
+  const rawTitle = item.title.trim();
+  const venueFromCalendar = item.liveTitle && item.liveTitle !== groupName ? item.liveTitle.trim() : "";
+  const atIndex = rawTitle.lastIndexOf("@");
+  const hasVenueInTitle = atIndex > 0 && atIndex < rawTitle.length - 1;
+  const title = hasVenueInTitle ? rawTitle.slice(0, atIndex).trim() : rawTitle;
+  const venue = hasVenueInTitle ? rawTitle.slice(atIndex + 1).trim() : venueFromCalendar;
+
+  return {
+    title,
+    venue,
+    liveType: inferLiveTypeFromTitle(title),
+  };
+}
+
+function isSameCalendarLive(project: LiveProject, item: CalendarItem, groupName: string) {
+  if (project.sourceCalendarEventId && project.sourceCalendarEventId === item.id) return true;
+  const draft = calendarItemToLiveDraft(item, groupName);
+  return (
+    project.eventDate === item.date &&
+    normalizeSearchText(project.title) === normalizeSearchText(draft.title)
+  );
+}
+
+function inferLiveTypeFromTitle(title: string): LiveType {
+  if (/生誕|birthday/i.test(title)) return "生誕祭";
+  if (/ワンマン|単独|one-?man/i.test(title)) return "ワンマン";
+  return "定期公演";
+}
+
+function inferCalendarLiveKind(title: string) {
+  const normalized = title.trim().toLowerCase();
+  if (/対バン|対ﾊﾞﾝ|フェス|fes|festival|サーキット|イベント出演|出演/.test(normalized)) return "対バン";
+  if (/主催|ワンマン|単独|定期公演|生誕|birthday|anniversary|リリイベ|リリース/.test(normalized)) return "主催";
+  return "対バン";
+}
+
+function isExternalCalendarLiveItem(item: CalendarItem) {
+  return Boolean(item.readonly && item.kind !== "祝日");
+}
+
+function normalizeSearchText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function removeGeneratedTemplateTasks(project: LiveProject): LiveProject {
+  const tasks = project.tasks.filter((task) => !task.id.startsWith(`${project.id}-task-`));
+  return tasks.length === project.tasks.length ? project : { ...project, tasks };
+}
+
+function restoreCalendarLiveStatus(project: LiveProject): LiveProject {
+  if (project.sourceCalendarEventId && project.status === "完了" && toDate(project.eventDate) >= today) {
+    return { ...project, status: "計画" };
+  }
+  return project;
+}
+
+function clearGeneratedDefaultScheduleInfo(project: LiveProject): LiveProject {
+  const eventDate = toDate(project.eventDate);
+  const generatedTicketLaunch = `${addDays(eventDate, -35)}T20:00`;
+  const generatedRehearsal = `${addDays(eventDate, -2)}T13:00 @ 未定`;
+  const generatedPhotoShoot = `${addDays(eventDate, -28)}T11:00 @ 未定`;
+  const nextProject = {
+    ...project,
+    ticketLaunch: project.ticketLaunch === generatedTicketLaunch ? "" : project.ticketLaunch,
+    rehearsal: project.rehearsal === generatedRehearsal ? "" : project.rehearsal,
+    photoShoot: project.photoShoot === generatedPhotoShoot ? "" : project.photoShoot,
+  };
+  return nextProject;
 }
 
 async function loadGoogleCalendarItems(calendarUrl: string, groupName: string): Promise<CalendarItem[]> {
@@ -5262,7 +6143,7 @@ async function loadGeneratedCalendarItems(groupName: string): Promise<CalendarIt
           time: event.time,
           title: event.title,
           liveTitle: event.location || groupName,
-          kind: "カレンダー",
+          kind: inferCalendarLiveKind(event.title),
           readonly: true,
           sourceUrl: event.sourceUrl,
         })) ?? [];
@@ -5364,7 +6245,7 @@ function parseIcsCalendar(icsText: string, groupName: string, sourceUrl: string)
         time: parsedStart.time,
         title: cleanSummary,
         liveTitle: cleanLocation || groupName,
-        kind: "カレンダー",
+        kind: inferCalendarLiveKind(cleanSummary),
         readonly: true,
         sourceUrl,
       },
@@ -5407,12 +6288,14 @@ function unescapeIcsText(value: string) {
 
 function shortKind(kind: string) {
   if (kind === "チケット") return "券";
-  if (kind === "ライブ") return "本";
+  if (kind === "主催") return "主催";
+  if (kind === "対バン") return "対バン";
+  if (kind === "ライブ") return "主催";
   if (kind === "タスク") return "タ";
-  if (kind === "カレンダー") return "予";
-  if (kind === "祝日") return "休";
-  if (kind === "ゲネ") return "ゲ";
-  if (kind === "撮影") return "撮";
+  if (kind === "カレンダー") return "予定";
+  if (kind === "祝日") return "";
+  if (kind === "ゲネ") return "準";
+  if (kind === "撮影") return "準";
   return kind.slice(0, 1);
 }
 
@@ -5507,13 +6390,13 @@ function StatusPill({ value }: { value: string }) {
       ? "recruiting"
       : value === "応募済み"
         ? "applied"
-        : value === "確定"
+      : value === "確定" || value === "有効"
           ? "confirmed"
-    : value === "遅延" || value === "未依頼" || value === "未作成" || value === "未入力"
+    : value === "遅延" || value === "未依頼" || value === "未作成" || value === "未入力" || value === "停止"
       ? "danger"
       : value === "祝日"
         ? "danger"
-      : value === "注意" || value === "制作中" || value === "確認待ち" || value === "作成中" || value === "確認中"
+      : value === "注意" || value === "制作中" || value === "確認待ち" || value === "作成中" || value === "確認中" || value === "承認待ち"
         ? "warn"
         : value === "完了" || value === "納品済" || value === "入稿済" || value === "公開済"
           ? "ok"
@@ -5681,7 +6564,8 @@ function isProductionLate(item: ProductionItem) {
 }
 
 function eventTone(kind: string) {
-  if (kind === "ライブ") return "live";
+  if (kind === "主催" || kind === "ライブ") return "host";
+  if (kind === "対バン") return "battle";
   if (kind === "チケット") return "ticket";
   if (kind === "カレンダー") return "external";
   if (kind === "祝日") return "holiday";
@@ -5947,20 +6831,18 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function generateTasks(projectId: string, eventDate: string, templateItems?: TaskTemplateItem[]): Task[] {
+function getAuthRedirectUrl() {
+  const explicitUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
+  if (explicitUrl) return explicitUrl;
+
+  const basePath = import.meta.env.VITE_BASE_PATH?.trim() || "/idle-task-manager/";
+  const normalizedBase = basePath.startsWith("/") ? basePath : `/${basePath}`;
+  return `${window.location.origin}${normalizedBase.endsWith("/") ? normalizedBase : `${normalizedBase}/`}`;
+}
+
+function generateTasks(projectId: string, eventDate: string, templateItems: TaskTemplateItem[] = []): Task[] {
   const date = toDate(eventDate);
-  const items =
-    templateItems ??
-    taskTemplates.map((template, index) => ({
-      id: `default-template-item-${index}`,
-      phase: template.phase,
-      title: template.title,
-      offset: template.offset,
-      owner: template.owner,
-      priority: template.priority,
-      memo: template.memo,
-      subtasks: subtaskTemplates[template.title] ?? [],
-    }));
+  const items = templateItems;
 
   return items.map((template, index) => {
     const taskId = `${projectId}-task-${index}`;
@@ -6278,16 +7160,24 @@ function formatFullDate(value: string) {
 }
 
 function formatDateTime(value: string) {
+  if (!value) return "未設定";
   const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return "未設定";
   const time = value.includes("T") ? value.split("T")[1].slice(0, 5) : "";
   return `${date.getMonth() + 1}/${date.getDate()}${time ? ` ${time}` : ""}`;
 }
 
 function formatSchedule(value: string) {
+  if (!value) return "未設定";
   const date = extractDate(value);
+  if (!isIsoDate(date)) return value.trim() || "未設定";
   const time = extractTime(value);
   const place = value.includes("@") ? ` @${value.split("@")[1].trim()}` : "";
   return `${formatDate(date)}${time ? ` ${time}` : ""}${place}`;
+}
+
+function toDateTimeLocalInput(value: string) {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) ? value.slice(0, 16) : "";
 }
 
 function extractDate(value: string) {
@@ -6299,3 +7189,4 @@ function extractTime(value: string) {
 }
 
 export default App;
+

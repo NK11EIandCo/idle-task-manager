@@ -1,5 +1,8 @@
 node_modules
 dist
+.firebase
+tmp-responsive
 .env
 .env.*
+!.env.example
 *.local
