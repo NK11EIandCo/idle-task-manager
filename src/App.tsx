@@ -36,12 +36,15 @@ import {
   type AppUserProfile,
   type AppUserRole,
   type AppUserStatus,
+  type ChekiRecruitmentRecord,
+  createLineAccountLink,
   deleteUserProfile,
   ensureCurrentUserProfile,
   loadUserProfiles,
   loadWorkspaceData,
   saveChekiApplications,
   saveWorkspaceData,
+  sendLineTestNotification,
   updateUserProfile,
 } from "./appDatabase";
 import { isSupabaseConfigured, supabase, type Session } from "./supabaseClient";
@@ -518,6 +521,7 @@ function buildRunScheduleFromTemplate(projectId: string, templateItems: RunSched
 const initialProjects: LiveProject[] = [];
 const authEnabled = import.meta.env.VITE_AUTH_ENABLED === "true";
 const noAuthUserId = "00000000-0000-0000-0000-000000000000";
+const lineLinkTokenStorageKey = "idleTaskPendingLineLinkToken";
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -526,12 +530,18 @@ function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [pendingLineLinkToken, setPendingLineLinkToken] = useState(() => consumeLineLinkTokenFromUrl());
+  const [lineLinkMessage, setLineLinkMessage] = useState("");
+  const [lineLinkError, setLineLinkError] = useState("");
+  const [isLineLinking, setIsLineLinking] = useState(false);
+  const lineLinkInFlightRef = useRef(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<AppUserProfile | null>(null);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [userProfiles, setUserProfiles] = useState<AppUserProfile[]>([]);
   const [userManagementMessage, setUserManagementMessage] = useState("");
+  const [lineTestSendingUserId, setLineTestSendingUserId] = useState("");
   const [managerSection, setManagerSection] = useState<"status" | "users">("status");
   const [isDataReady, setIsDataReady] = useState(!isSupabaseConfigured);
   const [isLoadingData, setIsLoadingData] = useState(isSupabaseConfigured);
@@ -563,6 +573,7 @@ function App() {
     createDefaultRunScheduleTemplateSet(),
   ]);
   const [selectedRunScheduleTemplateId, setSelectedRunScheduleTemplateId] = useState("run-template-standard");
+  const [chekiRecruitments, setChekiRecruitments] = useState<ChekiRecruitmentRecord[]>([]);
   const [appliedChekiShiftIds, setAppliedChekiShiftIds] = useState<string[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
@@ -644,6 +655,7 @@ function App() {
         setUserManagementMessage("");
         setManagerSection("status");
         setProjects([]);
+        setChekiRecruitments([]);
         setAppliedChekiShiftIds([]);
         setIsDataReady(false);
         setIsLoadingData(false);
@@ -673,6 +685,7 @@ function App() {
           setIsDataReady(false);
           setIsLoadingData(false);
           setProjects([]);
+          setChekiRecruitments([]);
           setAppliedChekiShiftIds([]);
         }
       })
@@ -688,6 +701,51 @@ function App() {
       cancelled = true;
     };
   }, [needsPasswordSetup, session]);
+
+  useEffect(() => {
+    if (!pendingLineLinkToken) return;
+    if (!authEnabled) {
+      setLineLinkMessage("LINE連携にはログインが必要です。認証を有効にしてください。");
+      return;
+    }
+    if (!session || needsPasswordSetup) {
+      setLineLinkMessage("LINE連携を続けるにはアプリにログインしてください。");
+      return;
+    }
+    if (lineLinkInFlightRef.current) return;
+    if (isProfileLoading || !currentUserProfile) {
+      setLineLinkMessage("LINE連携のためにユーザー情報を確認しています。");
+      return;
+    }
+
+    let cancelled = false;
+    lineLinkInFlightRef.current = true;
+    setIsLineLinking(true);
+    setLineLinkMessage("LINE連携を準備しています。");
+    setLineLinkError("");
+
+    createLineAccountLink(pendingLineLinkToken)
+      .then((accountLinkUrl) => {
+        if (cancelled) return;
+        clearPendingLineLinkToken();
+        window.location.assign(accountLinkUrl);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        clearPendingLineLinkToken();
+        setPendingLineLinkToken("");
+        lineLinkInFlightRef.current = false;
+        setIsLineLinking(false);
+        setLineLinkError(
+          `LINE連携URLを作成できませんでした。LINEで「連携」と送信して、もう一度やり直してください。${error.message ? ` (${error.message})` : ""}`,
+        );
+        setLineLinkMessage("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserProfile, isProfileLoading, needsPasswordSetup, pendingLineLinkToken, session]);
 
   useEffect(() => {
     if (!supabase || !userId || needsPasswordSetup || !isApprovedUser) return;
@@ -736,6 +794,7 @@ function App() {
         setSelectedCreateTemplateId(nextTaskTemplates[0]?.id ?? "");
         setRunScheduleTemplateSets(nextRunTemplates as RunScheduleTemplateSet[]);
         setSelectedRunScheduleTemplateId(nextRunTemplates[0]?.id ?? "run-template-standard");
+        setChekiRecruitments(data.chekiRecruitments);
         setAppliedChekiShiftIds(data.appliedChekiShiftIds);
         setActiveGroup(nextActiveGroup);
         setSelectedLiveId(nextProject?.id ?? "");
@@ -758,6 +817,7 @@ function App() {
           projects: nextProjects,
           taskTemplateSets: nextTaskTemplates,
           runScheduleTemplateSets: nextRunTemplates,
+          chekiRecruitments: data.chekiRecruitments,
           appliedChekiShiftIds: data.appliedChekiShiftIds,
         });
       })
@@ -781,6 +841,7 @@ function App() {
       projects,
       taskTemplateSets,
       runScheduleTemplateSets,
+      chekiRecruitments,
       appliedChekiShiftIds,
     });
     if (lastSavedSnapshotRef.current === snapshot) return;
@@ -797,6 +858,7 @@ function App() {
               projects,
               taskTemplateSets,
               runScheduleTemplateSets,
+              chekiRecruitments,
               appliedChekiShiftIds,
             },
             userId,
@@ -822,6 +884,7 @@ function App() {
   }, [
     appliedChekiShiftIds,
     groups,
+    chekiRecruitments,
     isDataReady,
     isLoadingData,
     isApprovedUser,
@@ -973,7 +1036,9 @@ function App() {
     setUserManagementMessage("保存中");
     try {
       const updated = await updateUserProfile(userIdToUpdate, updates);
-      setUserProfiles((current) => current.map((profile) => (profile.id === updated.id ? updated : profile)));
+      setUserProfiles((current) =>
+        current.map((profile) => (profile.id === updated.id ? { ...profile, ...updated } : profile)),
+      );
       if (updated.id === userId) setCurrentUserProfile(updated);
       setUserManagementMessage("保存しました");
     } catch (error) {
@@ -999,6 +1064,33 @@ function App() {
       setUserManagementMessage("削除しました");
     } catch (error) {
       setUserManagementMessage(error instanceof Error ? error.message : "ユーザーを削除できませんでした。");
+    }
+  }
+
+  async function sendManagedUserLineTest(userIdToNotify: string) {
+    if (!isAdmin) return;
+    const profile = userProfiles.find((current) => current.id === userIdToNotify);
+    if (!profile?.lineLinkedAt) {
+      setUserManagementMessage("このユーザーはLINE連携が完了していません。");
+      return;
+    }
+
+    setLineTestSendingUserId(userIdToNotify);
+    setUserManagementMessage("LINEテスト通知を送信中");
+    try {
+      const result = await sendLineTestNotification(userIdToNotify);
+      const details = [
+        result.lineResponseStatus ? `LINE ${result.lineResponseStatus}` : "",
+        result.lineUserSuffix ? `送信先末尾 ${result.lineUserSuffix}` : "",
+        result.sentAt ? `送信 ${formatDateTime(result.sentAt)}` : "",
+      ]
+        .filter(Boolean)
+        .join(" / ");
+      setUserManagementMessage(`LINEテスト通知を送信しました${details ? `（${details}）` : ""}`);
+    } catch (error) {
+      setUserManagementMessage(error instanceof Error ? error.message : "LINEテスト通知を送信できませんでした。");
+    } finally {
+      setLineTestSendingUserId("");
     }
   }
 
@@ -1849,7 +1941,7 @@ function App() {
     return (
       <AuthScreen
         email={authEmail}
-        message={authMessage}
+        message={authMessage || lineLinkMessage}
         password={authPassword}
         view={authView}
         onEmailChange={setAuthEmail}
@@ -1885,6 +1977,10 @@ function App() {
     return <LoadingScreen message="ユーザー権限を確認しています" />;
   }
 
+  if (authEnabled && isLineLinking) {
+    return <LoadingScreen message={lineLinkMessage || "LINE連携を準備しています"} />;
+  }
+
   if (authEnabled && loadError && !currentUserProfile) {
     return <AccessStatusScreen email={session?.user.email ?? ""} message={loadError} status="error" onSignOut={signOut} />;
   }
@@ -1905,6 +2001,11 @@ function App() {
 
   return (
     <div className="app">
+      {lineLinkError && (
+        <div className="globalNotice error" role="alert">
+          {lineLinkError}
+        </div>
+      )}
       <header className="topBar">
         <div className="modeSwitch" aria-label="表示切り替え">
           {isEmployee && (
@@ -1960,15 +2061,18 @@ function App() {
             setManagerSection={setManagerSection}
             setSelectedManagerIssueId={setSelectedManagerIssueId}
             setSelectedManagerLiveId={setSelectedManagerLiveId}
+            lineTestSendingUserId={lineTestSendingUserId}
             userManagementMessage={userManagementMessage}
             userProfiles={userProfiles}
             onOpenIssue={openManagerIssue}
+            onLineTestSend={sendManagedUserLineTest}
             onUserProfileDelete={deleteManagedUserProfile}
             onUserProfileChange={changeUserProfile}
           />
         ) : effectiveAppMode === "cheki" ? (
           <ChekiStaffView
             appliedShiftIds={appliedChekiShiftIds}
+            chekiRecruitments={chekiRecruitments}
             groups={groups}
             projects={projects}
             onAppliedShiftIdsChange={setAppliedChekiShiftIds}
@@ -2868,9 +2972,11 @@ function ManagerView({
   setManagerSection,
   setSelectedManagerIssueId,
   setSelectedManagerLiveId,
+  lineTestSendingUserId,
   userManagementMessage,
   userProfiles,
   onOpenIssue,
+  onLineTestSend,
   onUserProfileDelete,
   onUserProfileChange,
 }: {
@@ -2890,9 +2996,11 @@ function ManagerView({
   setManagerSection: (value: "status" | "users") => void;
   setSelectedManagerIssueId: (value: string | ((current: string) => string)) => void;
   setSelectedManagerLiveId: (value: string) => void;
+  lineTestSendingUserId: string;
   userManagementMessage: string;
   userProfiles: AppUserProfile[];
   onOpenIssue: (issue: ManagerIssue) => void;
+  onLineTestSend: (userId: string) => void;
   onUserProfileDelete: (userId: string) => void;
   onUserProfileChange: (userId: string, updates: Pick<AppUserProfile, "role" | "status">) => void;
 }) {
@@ -3044,8 +3152,10 @@ function ManagerView({
       {isAdmin && managerSection === "users" ? (
         <UserManagementView
           currentUserId={currentUserId}
+          lineTestSendingUserId={lineTestSendingUserId}
           message={userManagementMessage}
           profiles={userProfiles}
+          onLineTestSend={onLineTestSend}
           onUserProfileDelete={onUserProfileDelete}
           onUserProfileChange={onUserProfileChange}
         />
@@ -3270,14 +3380,18 @@ function ManagerView({
 
 function UserManagementView({
   currentUserId,
+  lineTestSendingUserId,
   message,
   profiles,
+  onLineTestSend,
   onUserProfileDelete,
   onUserProfileChange,
 }: {
   currentUserId: string;
+  lineTestSendingUserId: string;
   message: string;
   profiles: AppUserProfile[];
+  onLineTestSend: (userId: string) => void;
   onUserProfileDelete: (userId: string) => void;
   onUserProfileChange: (userId: string, updates: Pick<AppUserProfile, "role" | "status">) => void;
 }) {
@@ -3314,6 +3428,8 @@ function UserManagementView({
       <div className="userAdminList">
         {profiles.map((profile) => {
           const isSelf = profile.id === currentUserId;
+          const isLineLinked = Boolean(profile.lineLinkedAt);
+          const isLineSending = lineTestSendingUserId === profile.id;
           return (
             <article className={`userAdminRow status-${profile.status}`} key={profile.id}>
               <div className="userAdminIdentity">
@@ -3360,6 +3476,19 @@ function UserManagementView({
                 <StatusPill value={userStatusLabel(profile.status)} />
                 {isSelf && <small>自分自身</small>}
               </div>
+              <div className="userAdminLine">
+                <span className={`lineLinkedBadge ${isLineLinked ? "linked" : ""}`}>
+                  {isLineLinked ? "LINE連携済み" : "LINE未連携"}
+                </span>
+                <button
+                  disabled={!isLineLinked || isLineSending}
+                  onClick={() => onLineTestSend(profile.id)}
+                  type="button"
+                >
+                  <Send size={14} />
+                  {isLineSending ? "送信中" : "通知テスト"}
+                </button>
+              </div>
               <div className="userAdminActions">
                 <button
                   aria-label="ユーザーを削除"
@@ -3382,11 +3511,13 @@ function UserManagementView({
 
 function ChekiStaffView({
   appliedShiftIds,
+  chekiRecruitments,
   groups,
   onAppliedShiftIdsChange,
   projects,
 }: {
   appliedShiftIds: string[];
+  chekiRecruitments: ChekiRecruitmentRecord[];
   groups: GroupPage[];
   onAppliedShiftIdsChange: (value: string[] | ((current: string[]) => string[])) => void;
   projects: LiveProject[];
@@ -3397,7 +3528,10 @@ function ChekiStaffView({
     type: "apply" | "cancel";
     shift: ChekiShift;
   } | null>(null);
-  const shifts = useMemo(() => createChekiShifts(projects), [projects]);
+  const shifts = useMemo(
+    () => (chekiRecruitments.length > 0 ? chekiRecruitments.map(mapChekiRecruitmentToShift) : createChekiShifts(projects)),
+    [chekiRecruitments, projects],
+  );
   const shiftsWithApplication = shifts.map((shift) => ({
     ...shift,
     status: appliedShiftIds.includes(shift.id) && shift.status === "募集中" ? "応募済み" as const : shift.status,
@@ -3807,6 +3941,27 @@ function createChekiShifts(projects: LiveProject[]): ChekiShift[] {
           : "服装は黒系推奨。集合場所は確定後に共有します。",
       };
     });
+}
+
+function mapChekiRecruitmentToShift(recruitment: ChekiRecruitmentRecord): ChekiShift {
+  return {
+    id: recruitment.id,
+    liveId: recruitment.liveId ?? recruitment.id,
+    group: recruitment.group,
+    liveTitle: recruitment.liveTitle,
+    venue: recruitment.venue,
+    date: recruitment.date,
+    timeRange: recruitment.timeRange,
+    role: recruitment.role,
+    requiredCount: recruitment.requiredCount,
+    assignedCount: recruitment.assignedCount,
+    status: recruitment.status,
+    cancelUntil: recruitment.cancelUntil ? formatDate(recruitment.cancelUntil) : "確定後に共有",
+    meetingTime: recruitment.meetingTime,
+    meetingPlace: recruitment.meetingPlace,
+    belongings: recruitment.belongings,
+    memo: recruitment.memo,
+  };
 }
 
 function ChekiLiveCalendar({
@@ -6838,6 +6993,23 @@ function getAuthRedirectUrl() {
   const basePath = import.meta.env.VITE_BASE_PATH?.trim() || "/idle-task-manager/";
   const normalizedBase = basePath.startsWith("/") ? basePath : `/${basePath}`;
   return `${window.location.origin}${normalizedBase.endsWith("/") ? normalizedBase : `${normalizedBase}/`}`;
+}
+
+function consumeLineLinkTokenFromUrl() {
+  const currentUrl = new URL(window.location.href);
+  const linkToken = currentUrl.searchParams.get("linkToken") ?? currentUrl.searchParams.get("lineLinkToken") ?? "";
+  if (linkToken) {
+    window.localStorage.setItem(lineLinkTokenStorageKey, linkToken);
+    currentUrl.searchParams.delete("linkToken");
+    currentUrl.searchParams.delete("lineLinkToken");
+    window.history.replaceState({}, "", `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+    return linkToken;
+  }
+  return window.localStorage.getItem(lineLinkTokenStorageKey) ?? "";
+}
+
+function clearPendingLineLinkToken() {
+  window.localStorage.removeItem(lineLinkTokenStorageKey);
 }
 
 function generateTasks(projectId: string, eventDate: string, templateItems: TaskTemplateItem[] = []): Task[] {

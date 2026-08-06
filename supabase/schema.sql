@@ -163,10 +163,62 @@ create table if not exists run_schedule_template_items (
 create table if not exists cheki_applications (
   id text primary key,
   shift_id text not null,
+  recruitment_id text,
   app_user_id uuid not null default auth.uid(),
   status text not null default '応募済み',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists cheki_recruitments (
+  id text primary key default gen_random_uuid()::text,
+  live_id text references lives(id) on delete set null,
+  group_id text references idol_groups(id) on delete set null,
+  group_name text not null,
+  live_title text not null,
+  venue text,
+  event_date date not null,
+  time_range text not null default '18:00-21:30',
+  live_type text,
+  role_description text,
+  required_count integer not null default 0 check (required_count >= 0),
+  assigned_count integer not null default 0 check (assigned_count >= 0),
+  status text not null default '募集中',
+  cancel_until date,
+  meeting_time text,
+  meeting_place text,
+  belongings text,
+  memo text,
+  source_spreadsheet_id text,
+  source_sheet_id text,
+  source_key text,
+  last_synced_at timestamptz not null default now(),
+  archived_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (source_spreadsheet_id, source_sheet_id, source_key)
+);
+
+create table if not exists cheki_recruitment_slots (
+  id text primary key default gen_random_uuid()::text,
+  recruitment_id text not null references cheki_recruitments(id) on delete cascade,
+  source_spreadsheet_id text not null,
+  source_sheet_id text not null,
+  source_row_uid text not null,
+  source_row_number integer,
+  event_name text,
+  event_date date,
+  group_name text,
+  staff_name text,
+  sheet_status text,
+  employee_name text,
+  live_type text,
+  venue text,
+  sort_order integer not null default 0,
+  last_synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (source_spreadsheet_id, source_sheet_id, source_row_uid)
 );
 
 create table if not exists calendar_events (
@@ -198,6 +250,12 @@ create index if not exists idx_tickets_live_id on tickets(live_id);
 create index if not exists idx_production_items_live_id on production_items(live_id);
 create index if not exists idx_run_schedule_items_live_id on run_schedule_items(live_id);
 create index if not exists idx_cheki_applications_app_user_id on cheki_applications(app_user_id);
+create index if not exists idx_cheki_applications_recruitment_id on cheki_applications(recruitment_id);
+create index if not exists idx_cheki_recruitments_event_date on cheki_recruitments(event_date);
+create index if not exists idx_cheki_recruitments_group_id on cheki_recruitments(group_id);
+create index if not exists idx_cheki_recruitments_source on cheki_recruitments(source_spreadsheet_id, source_sheet_id);
+create index if not exists idx_cheki_recruitment_slots_recruitment_id on cheki_recruitment_slots(recruitment_id);
+create index if not exists idx_cheki_recruitment_slots_source on cheki_recruitment_slots(source_spreadsheet_id, source_sheet_id);
 create index if not exists idx_app_user_profiles_status on app_user_profiles(status);
 
 alter table idol_groups enable row level security;
@@ -213,6 +271,8 @@ alter table task_template_subtasks enable row level security;
 alter table run_schedule_templates enable row level security;
 alter table run_schedule_template_items enable row level security;
 alter table cheki_applications enable row level security;
+alter table cheki_recruitments enable row level security;
+alter table cheki_recruitment_slots enable row level security;
 alter table calendar_events enable row level security;
 alter table app_user_profiles enable row level security;
 
@@ -231,6 +291,8 @@ revoke all on table
   run_schedule_templates,
   run_schedule_template_items,
   cheki_applications,
+  cheki_recruitments,
+  cheki_recruitment_slots,
   calendar_events,
   app_user_profiles
 from anon;
@@ -250,9 +312,23 @@ grant select, insert, update, delete on table
   run_schedule_templates,
   run_schedule_template_items,
   cheki_applications,
+  cheki_recruitments,
+  cheki_recruitment_slots,
   calendar_events,
   app_user_profiles
 to authenticated;
+
+alter table cheki_applications
+  add column if not exists recruitment_id text references cheki_recruitments(id) on delete cascade;
+
+do $$
+begin
+  alter table cheki_applications
+    add constraint cheki_applications_recruitment_id_fkey
+    foreign key (recruitment_id) references cheki_recruitments(id) on delete cascade;
+exception
+  when duplicate_object then null;
+end $$;
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -378,6 +454,10 @@ drop policy if exists "authenticated_select_run_schedule_template_items" on run_
 drop policy if exists "authenticated_write_run_schedule_template_items" on run_schedule_template_items;
 drop policy if exists "authenticated_select_cheki_applications" on cheki_applications;
 drop policy if exists "authenticated_write_cheki_applications" on cheki_applications;
+drop policy if exists "authenticated_select_cheki_recruitments" on cheki_recruitments;
+drop policy if exists "authenticated_write_cheki_recruitments" on cheki_recruitments;
+drop policy if exists "authenticated_select_cheki_recruitment_slots" on cheki_recruitment_slots;
+drop policy if exists "authenticated_write_cheki_recruitment_slots" on cheki_recruitment_slots;
 drop policy if exists "authenticated_select_calendar_events" on calendar_events;
 drop policy if exists "authenticated_write_calendar_events" on calendar_events;
 drop policy if exists "employee_all_idol_groups" on idol_groups;
@@ -394,8 +474,11 @@ drop policy if exists "employee_all_run_schedule_templates" on run_schedule_temp
 drop policy if exists "employee_all_run_schedule_template_items" on run_schedule_template_items;
 drop policy if exists "employee_all_calendar_events" on calendar_events;
 drop policy if exists "employee_all_cheki_applications" on cheki_applications;
+drop policy if exists "employee_all_cheki_recruitments" on cheki_recruitments;
+drop policy if exists "employee_all_cheki_recruitment_slots" on cheki_recruitment_slots;
 drop policy if exists "cheki_select_idol_groups" on idol_groups;
 drop policy if exists "cheki_select_lives" on lives;
+drop policy if exists "cheki_select_cheki_recruitments" on cheki_recruitments;
 drop policy if exists "cheki_select_own_applications" on cheki_applications;
 drop policy if exists "cheki_insert_own_applications" on cheki_applications;
 drop policy if exists "cheki_update_own_applications" on cheki_applications;
@@ -414,6 +497,8 @@ drop policy if exists "no_auth_all_run_schedule_templates" on run_schedule_templ
 drop policy if exists "no_auth_all_run_schedule_template_items" on run_schedule_template_items;
 drop policy if exists "no_auth_all_calendar_events" on calendar_events;
 drop policy if exists "no_auth_all_cheki_applications" on cheki_applications;
+drop policy if exists "no_auth_all_cheki_recruitments" on cheki_recruitments;
+drop policy if exists "no_auth_all_cheki_recruitment_slots" on cheki_recruitment_slots;
 drop policy if exists "profile_select_self_or_admin" on app_user_profiles;
 drop policy if exists "profile_insert_self_pending" on app_user_profiles;
 drop policy if exists "profile_update_admin" on app_user_profiles;
@@ -450,9 +535,14 @@ create policy "employee_all_run_schedule_templates" on run_schedule_templates fo
 create policy "employee_all_run_schedule_template_items" on run_schedule_template_items for all to authenticated using (public.is_app_employee()) with check (public.is_app_employee());
 create policy "employee_all_calendar_events" on calendar_events for all to authenticated using (public.is_app_employee()) with check (public.is_app_employee());
 create policy "employee_all_cheki_applications" on cheki_applications for all to authenticated using (public.is_app_employee()) with check (public.is_app_employee());
+create policy "employee_all_cheki_recruitments" on cheki_recruitments for all to authenticated using (public.is_app_employee()) with check (public.is_app_employee());
+create policy "employee_all_cheki_recruitment_slots" on cheki_recruitment_slots for all to authenticated using (public.is_app_employee()) with check (public.is_app_employee());
 
 create policy "cheki_select_idol_groups" on idol_groups for select to authenticated using (public.is_app_cheki());
 create policy "cheki_select_lives" on lives for select to authenticated using (public.is_app_cheki());
+create policy "cheki_select_cheki_recruitments" on cheki_recruitments
+  for select to authenticated
+  using (public.is_app_cheki() and archived_at is null);
 create policy "cheki_select_own_applications" on cheki_applications for select to authenticated using (app_user_id = auth.uid());
 create policy "cheki_insert_own_applications" on cheki_applications for insert to authenticated with check (app_user_id = auth.uid());
 create policy "cheki_update_own_applications" on cheki_applications for update to authenticated using (app_user_id = auth.uid()) with check (app_user_id = auth.uid());

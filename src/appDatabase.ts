@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseAnonKey, supabaseUrl } from "./supabaseClient";
 
 type GroupRecord = {
   id?: string;
@@ -107,11 +107,32 @@ type RunScheduleTemplateRecord = {
   items: RunScheduleTemplateItemRecord[];
 };
 
+export type ChekiRecruitmentRecord = {
+  id: string;
+  liveId?: string;
+  group: string;
+  liveTitle: string;
+  venue: string;
+  date: string;
+  timeRange: string;
+  liveType?: string;
+  role: string;
+  requiredCount: number;
+  assignedCount: number;
+  status: "募集中" | "応募済み" | "確定";
+  cancelUntil: string;
+  meetingTime: string;
+  meetingPlace: string;
+  belongings: string;
+  memo: string;
+};
+
 export type WorkspaceData = {
   groups: GroupRecord[];
   projects: LiveRecord[];
   taskTemplateSets: TaskTemplateRecord[];
   runScheduleTemplateSets: RunScheduleTemplateRecord[];
+  chekiRecruitments: ChekiRecruitmentRecord[];
   appliedChekiShiftIds: string[];
 };
 
@@ -124,14 +145,32 @@ export type AppUserProfile = {
   displayName: string;
   role: AppUserRole;
   status: AppUserStatus;
+  lineUserId?: string;
+  lineLinkedAt?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type LineTestNotificationResult = {
+  lineResponseStatus?: number;
+  lineUserSuffix?: string;
+  sentAt?: string;
+  logStatus?: string;
 };
 
 type TableResult<T> = { data: T[] | null; error: { message: string } | null };
 
 const orderedSelect = async <T>(table: string, order = "created_at") =>
   (await supabase!.from(table).select("*").order(order, { ascending: true })) as TableResult<T>;
+
+const optionalOrderedSelect = async <T>(table: string, order = "created_at") => {
+  const result = (await supabase!.from(table).select("*").order(order, { ascending: true })) as TableResult<T>;
+  const message = result.error?.message ?? "";
+  if (/does not exist|Could not find the table/i.test(message)) {
+    return { data: [], error: null } as TableResult<T>;
+  }
+  return result;
+};
 
 function mapUserProfile(row: Record<string, unknown>): AppUserProfile {
   return {
@@ -176,13 +215,36 @@ export async function ensureCurrentUserProfile(userId: string, email: string): P
 export async function loadUserProfiles(): Promise<AppUserProfile[]> {
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const result = (await supabase
-    .from("app_user_profiles")
-    .select("*")
-    .order("created_at", { ascending: false })) as TableResult<Record<string, unknown>>;
+  const [profileResult, lineAccountResult] = await Promise.all([
+    (await supabase
+      .from("app_user_profiles")
+      .select("*")
+      .order("created_at", { ascending: false })) as TableResult<Record<string, unknown>>,
+    (await supabase.from("user_line_accounts").select("user_id, line_user_id, linked_at")) as TableResult<
+      Record<string, unknown>
+    >,
+  ]);
 
-  if (result.error) throw new Error(result.error.message);
-  return (result.data ?? []).map(mapUserProfile);
+  if (profileResult.error) throw new Error(profileResult.error.message);
+  if (lineAccountResult.error) throw new Error(lineAccountResult.error.message);
+
+  const lineAccountsByUserId = new Map(
+    (lineAccountResult.data ?? []).map((row) => [
+      asString(row.user_id),
+      {
+        lineUserId: optionalString(row.line_user_id),
+        lineLinkedAt: optionalString(row.linked_at),
+      },
+    ]),
+  );
+
+  return (profileResult.data ?? []).map((row) => {
+    const profile = mapUserProfile(row);
+    return {
+      ...profile,
+      ...lineAccountsByUserId.get(profile.id),
+    };
+  });
 }
 
 export async function updateUserProfile(
@@ -219,19 +281,98 @@ export async function deleteUserProfile(userId: string): Promise<void> {
   if (fallbackResult.error) throw new Error(fallbackResult.error.message || rpcResult.error.message);
 }
 
+export async function createLineAccountLink(linkToken: string): Promise<string> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/line-link-nonce`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${session?.access_token ?? supabaseAnonKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ linkToken }),
+  });
+
+  const data = (await response.json().catch(async () => ({
+    error: await response.text().catch(() => ""),
+  }))) as { accountLinkUrl?: string; error?: string; detail?: string };
+
+  if (!response.ok || !data.accountLinkUrl) {
+    const detail = [data.error, data.detail, `status:${response.status}`].filter(Boolean).join(" / ");
+    throw new Error(detail || "LINE連携URLを作成できませんでした。");
+  }
+
+  return data.accountLinkUrl;
+}
+
+export async function sendLineTestNotification(appUserId: string): Promise<LineTestNotificationResult> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("ログイン情報を確認できませんでした。もう一度ログインしてください。");
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/line-admin-test-push`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ appUserId }),
+  });
+
+  const data = (await response.json().catch(async () => ({
+    error: await response.text().catch(() => ""),
+  }))) as {
+    ok?: boolean;
+    error?: string;
+    detail?: string;
+    status?: number;
+    lineResponseStatus?: number;
+    lineUserSuffix?: string;
+    sentAt?: string;
+    logStatus?: string;
+  };
+
+  if (!response.ok || !data.ok) {
+    const detail = [data.error, data.detail, data.status ? `LINE status:${data.status}` : "", `status:${response.status}`]
+      .filter(Boolean)
+      .join(" / ");
+    throw new Error(detail || "LINEテスト通知を送信できませんでした。");
+  }
+
+  return {
+    lineResponseStatus: data.lineResponseStatus,
+    lineUserSuffix: data.lineUserSuffix,
+    sentAt: data.sentAt,
+    logStatus: data.logStatus,
+  };
+}
+
 export async function loadWorkspaceData(userId: string, role: AppUserRole): Promise<WorkspaceData> {
   if (!supabase) throw new Error("Supabase is not configured.");
 
   if (role === "cheki") {
-    const [groupResult, liveResult, chekiApplicationResult] = await Promise.all([
+    const [groupResult, liveResult, chekiRecruitmentResult, chekiApplicationResult] = await Promise.all([
       orderedSelect<Record<string, unknown>>("idol_groups"),
       orderedSelect<Record<string, unknown>>("lives", "event_date"),
+      optionalOrderedSelect<Record<string, unknown>>("cheki_recruitments", "event_date"),
       (await supabase
         .from("cheki_applications")
         .select("*")
         .eq("app_user_id", userId)) as TableResult<Record<string, unknown>>,
     ]);
-    const error = [groupResult, liveResult, chekiApplicationResult].find((result) => result.error)?.error;
+    const error = [groupResult, liveResult, chekiRecruitmentResult, chekiApplicationResult].find((result) => result.error)?.error;
     if (error) throw new Error(error.message);
 
     const groups = (groupResult.data ?? []).map((row) => ({
@@ -270,6 +411,7 @@ export async function loadWorkspaceData(userId: string, role: AppUserRole): Prom
       projects,
       taskTemplateSets: [],
       runScheduleTemplateSets: [],
+      chekiRecruitments: mapChekiRecruitments(chekiRecruitmentResult.data ?? []),
       appliedChekiShiftIds: (chekiApplicationResult.data ?? [])
         .filter((row) => asString(row.status) === "応募済み")
         .map((row) => asString(row.shift_id)),
@@ -289,6 +431,7 @@ export async function loadWorkspaceData(userId: string, role: AppUserRole): Prom
     taskTemplateSubtaskResult,
     runTemplateResult,
     runTemplateItemResult,
+    chekiRecruitmentResult,
     chekiApplicationResult,
   ] = await Promise.all([
     orderedSelect<Record<string, unknown>>("idol_groups"),
@@ -303,6 +446,7 @@ export async function loadWorkspaceData(userId: string, role: AppUserRole): Prom
     orderedSelect<Record<string, unknown>>("task_template_subtasks", "sort_order"),
     orderedSelect<Record<string, unknown>>("run_schedule_templates"),
     orderedSelect<Record<string, unknown>>("run_schedule_template_items", "sort_order"),
+    optionalOrderedSelect<Record<string, unknown>>("cheki_recruitments", "event_date"),
     (await supabase
       .from("cheki_applications")
       .select("*")
@@ -322,6 +466,7 @@ export async function loadWorkspaceData(userId: string, role: AppUserRole): Prom
     taskTemplateSubtaskResult,
     runTemplateResult,
     runTemplateItemResult,
+    chekiRecruitmentResult,
     chekiApplicationResult,
   ];
   const error = results.find((result) => result.error)?.error;
@@ -459,6 +604,7 @@ export async function loadWorkspaceData(userId: string, role: AppUserRole): Prom
     projects,
     taskTemplateSets,
     runScheduleTemplateSets,
+    chekiRecruitments: mapChekiRecruitments(chekiRecruitmentResult.data ?? []),
     appliedChekiShiftIds: (chekiApplicationResult.data ?? [])
       .filter((row) => asString(row.status) === "応募済み")
       .map((row) => asString(row.shift_id)),
@@ -615,6 +761,7 @@ export async function saveWorkspaceData(data: WorkspaceData, userId: string): Pr
   const chekiApplications = data.appliedChekiShiftIds.map((shiftId) => ({
     id: `cheki-${userId}-${shiftId}`,
     shift_id: shiftId,
+    recruitment_id: shiftId.startsWith("cheki-rec-") ? shiftId : null,
     app_user_id: userId,
     status: "応募済み",
   }));
@@ -658,6 +805,7 @@ export async function saveChekiApplications(userId: string, appliedChekiShiftIds
   const chekiApplications = appliedChekiShiftIds.map((shiftId) => ({
     id: `cheki-${userId}-${shiftId}`,
     shift_id: shiftId,
+    recruitment_id: shiftId.startsWith("cheki-rec-") ? shiftId : null,
     app_user_id: userId,
     status: "応募済み",
   }));
@@ -702,6 +850,31 @@ function groupBy(rows: Record<string, unknown>[], key: string) {
   return map;
 }
 
+function mapChekiRecruitments(rows: Record<string, unknown>[]): ChekiRecruitmentRecord[] {
+  return rows
+    .filter((row) => !row.archived_at)
+    .map((row) => ({
+      id: asString(row.id),
+      liveId: optionalString(row.live_id),
+      group: asString(row.group_name),
+      liveTitle: asString(row.live_title),
+      venue: asString(row.venue, "未設定"),
+      date: asDateString(row.event_date),
+      timeRange: asString(row.time_range, "18:00-21:30"),
+      liveType: optionalString(row.live_type),
+      role: asString(row.role_description, "チェキ列整理、撮影補助、販売導線の案内、終演後の物販撤収補助"),
+      requiredCount: Number(row.required_count ?? 0),
+      assignedCount: Number(row.assigned_count ?? 0),
+      status: asChekiRecruitmentStatus(row.status),
+      cancelUntil: asDateString(row.cancel_until),
+      meetingTime: asString(row.meeting_time, "確定後に共有"),
+      meetingPlace: asString(row.meeting_place, "確定後に共有"),
+      belongings: asString(row.belongings, "黒系の服装、身分証、筆記用具、飲み物"),
+      memo: asString(row.memo, "服装は黒系推奨。集合場所は確定後に共有します。"),
+    }))
+    .filter((row) => row.id && row.liveTitle && row.date);
+}
+
 function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : value == null ? fallback : String(value);
 }
@@ -712,6 +885,10 @@ function asUserRole(value: unknown): AppUserRole {
 
 function asUserStatus(value: unknown): AppUserStatus {
   return value === "active" || value === "suspended" || value === "pending" ? value : "pending";
+}
+
+function asChekiRecruitmentStatus(value: unknown): ChekiRecruitmentRecord["status"] {
+  return value === "確定" || value === "応募済み" || value === "募集中" ? value : "募集中";
 }
 
 function optionalString(value: unknown) {

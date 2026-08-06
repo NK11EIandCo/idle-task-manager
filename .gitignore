@@ -1,6 +1,7 @@
 node_modules
 dist
 .firebase
+supabase/.temp
 tmp-responsive
 .env
 .env.*

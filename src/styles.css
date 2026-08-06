@@ -53,6 +53,29 @@ button {
   overflow: hidden;
 }
 
+.globalNotice {
+  position: fixed;
+  top: 58px;
+  left: 50%;
+  z-index: 1200;
+  width: min(720px, calc(100vw - 28px));
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.globalNotice.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
 .topBar {
   position: absolute;
   top: 10px;
@@ -640,7 +663,7 @@ button:disabled {
 
 .userAdminRow {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) 150px 140px auto auto;
+  grid-template-columns: minmax(220px, 1fr) 145px 135px auto auto auto;
   gap: 10px;
   align-items: center;
   padding: 12px;
@@ -709,6 +732,57 @@ button:disabled {
   display: grid;
   justify-items: end;
   gap: 4px;
+}
+
+.userAdminLine {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lineLinkedBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.lineLinkedBadge.linked {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #047857;
+}
+
+.userAdminLine button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.userAdminLine button:disabled {
+  border-color: var(--line);
+  background: #f8fafc;
+  color: var(--faint);
 }
 
 .userAdminActions {
@@ -3246,6 +3320,14 @@ button:disabled {
   margin-bottom: 18px;
 }
 
+.drawerHeader > div {
+  min-width: 0;
+}
+
+.drawerHeader h2 {
+  overflow-wrap: anywhere;
+}
+
 .iconButton {
   display: grid;
   width: 38px;
@@ -3437,6 +3519,118 @@ button:disabled {
 
   .liveSummary .infoList {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1240px) and (min-width: 901px) {
+  .app {
+    height: 100vh;
+    padding: 8px 10px;
+    overflow: hidden;
+  }
+
+  .topBar {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    margin-bottom: 8px;
+    pointer-events: auto;
+  }
+
+  .groupPage {
+    height: calc(100vh - 16px);
+    min-height: 0;
+    gap: 8px;
+    padding-top: 0;
+    overflow: hidden;
+  }
+
+  .workGrid {
+    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    height: calc(100vh - 62px);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .liveRail {
+    grid-row: 1 / 3;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    height: 100%;
+    min-height: 0;
+    padding-top: 0;
+    overflow: hidden;
+  }
+
+  .liveRail > .sidePanel:first-child {
+    flex: 0 0 auto;
+  }
+
+  .liveRail > .sidePanel:last-child {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .liveListWrap,
+  .liveList {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .calendarColumn {
+    grid-column: 2;
+    grid-row: 1;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .calendarColumn > .sidePanel {
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .calendarPanel {
+    height: auto;
+    min-height: 0;
+    grid-template-rows: auto auto auto auto auto;
+  }
+
+  .calendarDetail {
+    max-height: 116px;
+    overflow: auto;
+    padding-right: 2px;
+    scrollbar-width: none;
+  }
+
+  .calendarDetail::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .contentArea {
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    gap: 10px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .taskColumn {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .actionColumn {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -5736,6 +5930,7 @@ button:disabled {
   inset: 0;
   z-index: 20;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto;
   align-content: start;
   gap: 14px;
@@ -5746,6 +5941,12 @@ button:disabled {
   box-shadow: 0 24px 80px rgba(24, 35, 51, 0.18);
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.scheduleOverlay > *,
+.runTemplateEditor > *,
+.runTemplatePreview > * {
+  min-width: 0;
 }
 
 .runTemplateEditor {
@@ -6066,6 +6267,7 @@ button:disabled {
   min-height: 0;
   align-content: start;
   gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .scheduleOverlay .compactTitle {
@@ -6089,6 +6291,8 @@ button:disabled {
 
 .scheduleOverlay .runScheduleActions {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
@@ -6293,6 +6497,120 @@ button:disabled {
   }
 }
 
+@media (max-width: 1700px) and (min-width: 1241px) {
+  .scheduleOverlay .runScheduleToolbar {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .scheduleOverlay .runScheduleActions {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .scheduleOverlay .runTemplateSelect {
+    flex: 1 1 170px;
+    min-width: 160px;
+  }
+
+  .scheduleOverlay .runScheduleFilter {
+    flex: 0 1 130px;
+    min-width: 120px;
+  }
+
+  .scheduleOverlay .runScheduleActions button {
+    min-width: 86px;
+    flex: 0 0 auto;
+  }
+
+  .scheduleOverlay .runScheduleRows {
+    padding-left: 22px;
+  }
+
+  .scheduleOverlay .runScheduleRow,
+  .scheduleOverlay .runScheduleAdd {
+    grid-template-columns: 76px minmax(0, 1fr) 104px 82px 34px;
+    grid-template-areas:
+      "time title kind owner delete"
+      "place place note note note";
+  }
+
+  .scheduleOverlay .runScheduleAdd {
+    width: calc(100% - 22px);
+    margin-left: 22px;
+  }
+}
+
+@media (max-width: 1700px) and (min-width: 641px) {
+  .runTemplateEditSection,
+  .runTemplatePreviewSection {
+    min-width: 0;
+  }
+
+  .runTemplateColumnLabels {
+    display: none;
+  }
+
+  .runTemplateRow {
+    grid-template-columns: 78px minmax(0, 1fr) 112px 34px;
+    grid-template-areas:
+      "time title kind delete"
+      "owner place note note";
+  }
+
+  .runTemplatePreviewRow {
+    grid-template-columns: 78px minmax(0, 1fr) 112px;
+    grid-template-areas:
+      "time title kind"
+      "owner place place"
+      "note note note";
+  }
+
+  .runTemplateRow select[aria-label="時刻"],
+  .runTemplatePreviewRow .previewTime {
+    grid-area: time;
+  }
+
+  .runTemplateRow input[aria-label="内容"],
+  .runTemplatePreviewRow b {
+    grid-area: title;
+  }
+
+  .runTemplateRow select[aria-label="担当区分"],
+  .runTemplatePreviewRow .previewOwnerKind {
+    grid-area: kind;
+  }
+
+  .runTemplateRow select[aria-label="担当"],
+  .runTemplatePreviewRow small:nth-of-type(1) {
+    grid-area: owner;
+  }
+
+  .runTemplateRow input[aria-label="場所"],
+  .runTemplatePreviewRow small:nth-of-type(2) {
+    grid-area: place;
+  }
+
+  .runTemplateRow input[aria-label="メモ"],
+  .runTemplatePreviewRow small:nth-of-type(3) {
+    grid-area: note;
+  }
+
+  .runTemplatePreviewRow small:nth-of-type(3) {
+    justify-content: flex-start;
+    min-height: 32px;
+    height: auto;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .runTemplateRow .scheduleDeleteButton {
+    grid-area: delete;
+  }
+}
+
 @media (max-width: 1180px) {
   .chekiGrid {
     grid-template-columns: minmax(330px, 0.9fr) minmax(360px, 1fr);
@@ -6397,7 +6715,7 @@ button:disabled {
   }
 
   .userAdminRow {
-    grid-template-columns: minmax(220px, 1fr) minmax(120px, 150px) minmax(120px, 140px) auto;
+    grid-template-columns: minmax(220px, 1fr) minmax(120px, 150px) minmax(120px, 140px) auto auto auto;
   }
 
   .userAdminStatus {
@@ -6415,6 +6733,200 @@ button:disabled {
 
   .chekiSchedule {
     grid-column: 1 / -1;
+  }
+
+  .createOverlay,
+  .templateOverlay,
+  .scheduleOverlay,
+  .runTemplateEditor,
+  .runTemplatePreview {
+    position: fixed;
+    inset: 12px;
+    z-index: 80;
+    max-height: calc(100dvh - 24px);
+    border-radius: 10px;
+  }
+
+  .createOverlay,
+  .scheduleOverlay {
+    overflow: auto;
+  }
+
+  .templateOverlay,
+  .runTemplateEditor,
+  .runTemplatePreview {
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 1240px) and (min-width: 901px) {
+  .app {
+    min-height: 100vh;
+    height: auto;
+    padding: 8px 10px;
+    overflow: visible;
+  }
+
+  .topBar {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .groupPage {
+    height: auto;
+    min-height: 0;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .workGrid {
+    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: start;
+    gap: 10px;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .liveRail {
+    grid-row: 1 / 3;
+    position: sticky;
+    top: 60px;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    height: calc(100vh - 70px);
+    min-height: 0;
+    padding-top: 0;
+    overflow: hidden;
+  }
+
+  .liveRail > .sidePanel:last-child {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .liveListWrap,
+  .liveList {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .calendarColumn {
+    grid-column: 2;
+    grid-row: 1;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .calendarColumn > .sidePanel {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .calendarPanel {
+    grid-template-rows: auto auto auto auto auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .calendarGrid {
+    min-height: 0;
+  }
+
+  .calendarCell {
+    min-height: 60px;
+  }
+
+  .calendarAgenda {
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .agendaListWrap {
+    max-height: 120px;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-width: none;
+  }
+
+  .agendaListWrap::-webkit-scrollbar,
+  .agendaList::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .contentArea {
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .taskPane,
+  .actionPane {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .taskColumn {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .taskPanelHead {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .taskHeaderStack {
+    justify-items: stretch;
+  }
+
+  .taskControls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taskControls .templateButton,
+  .taskControls .ownerSelect {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .taskControls .ownerSelect,
+  .taskControls .ownerSelect.roleSelect {
+    flex-basis: auto;
+  }
+
+  .taskViews {
+    min-width: 0;
+  }
+
+  .quickAdd {
+    grid-template-columns: minmax(0, 1fr) 116px 74px 54px;
+    padding-left: 8px;
+  }
+
+  .taskList {
+    min-height: 0;
+  }
+
+  .actionColumn {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 }
 
@@ -6830,10 +7342,25 @@ button:disabled {
     gap: 8px;
   }
 
+  .userAdminSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .userAdminSummary div {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 6px;
+  }
+
   .userAdminStatus,
+  .userAdminLine,
   .userAdminActions {
     justify-items: start;
     justify-content: flex-start;
+  }
+
+  .userAdminLine {
+    flex-wrap: wrap;
   }
 
   .chekiHero {
@@ -6976,5 +7503,325 @@ button:disabled {
   .managerLiveMetrics,
   .selectedLiveMetrics {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile usability pass: keep long work panels and overlays readable on phones. */
+@media (max-width: 640px) {
+  .liveRail {
+    padding-top: 0;
+    overflow: visible;
+  }
+
+  .liveRail > .sidePanel:last-child {
+    max-height: min(430px, 56vh);
+  }
+
+  .liveListWrap {
+    height: 100%;
+  }
+
+  .liveList {
+    max-height: 100%;
+  }
+
+  .createOverlay,
+  .templateOverlay,
+  .scheduleOverlay,
+  .runTemplateEditor,
+  .runTemplatePreview {
+    position: fixed;
+    inset: 8px;
+    z-index: 80;
+    max-height: calc(100dvh - 16px);
+    overflow: auto;
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .templateOverlay,
+  .runTemplateEditor,
+  .runTemplatePreview {
+    overflow: hidden;
+  }
+
+  .scheduleOverlay {
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: stretch;
+  }
+
+  .scheduleOverlay .drawerHeader,
+  .templateOverlay .drawerHeader,
+  .runTemplateEditor .drawerHeader,
+  .runTemplatePreview .drawerHeader,
+  .createOverlay .drawerHeader {
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .scheduleOverlay .drawerHeader h2,
+  .templateOverlay .drawerHeader h2,
+  .runTemplateEditor .drawerHeader h2,
+  .runTemplatePreview .drawerHeader h2,
+  .createOverlay .drawerHeader h2 {
+    font-size: 16px;
+  }
+
+  .scheduleOverlay .drawerHeader span,
+  .templateOverlay .drawerHeader span,
+  .runTemplateEditor .drawerHeader span,
+  .runTemplatePreview .drawerHeader span {
+    font-size: 11px;
+  }
+
+  .scheduleOverlay .compactSection {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .scheduleOverlay .runScheduleToolbar {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .scheduleOverlay .runScheduleTabs {
+    width: 100%;
+  }
+
+  .scheduleOverlay .runScheduleActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    justify-content: stretch;
+  }
+
+  .scheduleOverlay .runTemplateSelect,
+  .scheduleOverlay .runScheduleFilter {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .scheduleOverlay .runScheduleActions button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 6px;
+  }
+
+  .scheduleOverlay .runScheduleRows {
+    min-height: 0;
+    overflow: auto;
+    padding-left: 18px;
+    padding-right: 1px;
+    scrollbar-width: none;
+  }
+
+  .scheduleOverlay .runScheduleRows::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .scheduleOverlay .runScheduleRows::before {
+    left: 8px;
+  }
+
+  .scheduleOverlay .runScheduleRow,
+  .scheduleOverlay .runScheduleAdd {
+    width: 100%;
+    margin-left: 0;
+    grid-template-columns: minmax(88px, 0.42fr) minmax(0, 1fr) 34px;
+    grid-template-areas:
+      "time title delete"
+      "kind owner owner"
+      "place place place"
+      "note note note";
+    gap: 6px;
+  }
+
+  .scheduleOverlay .runScheduleRow::before {
+    left: -15px;
+  }
+
+  .scheduleOverlay .runScheduleAdd {
+    margin-top: 8px;
+    padding-left: 9px;
+  }
+
+  .scheduleOverlay .runScheduleAdd button,
+  .scheduleOverlay .scheduleDeleteButton {
+    width: 34px;
+    min-width: 34px;
+  }
+
+  .runTemplateRows,
+  .runTemplatePreviewRows {
+    overflow: auto;
+  }
+
+  .runTemplateEditSection,
+  .runTemplatePreviewSection {
+    min-width: 0;
+  }
+
+  .runTemplateEditSection h3,
+  .runTemplatePreviewSection h3 {
+    padding-left: 30px;
+  }
+
+  .runTemplateEditTimeline,
+  .runTemplatePreviewTimeline {
+    padding-left: 30px;
+  }
+
+  .runTemplateEditTimeline::before,
+  .runTemplatePreviewTimeline::before {
+    left: 10px;
+  }
+
+  .runTemplateRow,
+  .runTemplatePreviewRow {
+    grid-template-columns: minmax(88px, 0.42fr) minmax(0, 1fr) 34px;
+    grid-template-areas:
+      "time title delete"
+      "kind owner owner"
+      "place place place"
+      "note note note";
+  }
+
+  .runTemplatePreviewRow {
+    grid-template-columns: minmax(88px, 0.42fr) minmax(0, 1fr);
+    grid-template-areas:
+      "time title"
+      "kind owner"
+      "place place"
+      "note note";
+  }
+
+  .runTemplateRow::before,
+  .runTemplatePreviewRow::before {
+    left: -25px;
+  }
+
+  .runTemplateRow select[aria-label="時刻"],
+  .runTemplatePreviewRow .previewTime {
+    grid-area: time;
+  }
+
+  .runTemplateRow input[aria-label="内容"],
+  .runTemplatePreviewRow b {
+    grid-area: title;
+  }
+
+  .runTemplateRow select[aria-label="担当区分"],
+  .runTemplatePreviewRow .previewOwnerKind {
+    grid-area: kind;
+  }
+
+  .runTemplateRow select[aria-label="担当"],
+  .runTemplatePreviewRow small:nth-of-type(1) {
+    grid-area: owner;
+  }
+
+  .runTemplateRow input[aria-label="場所"],
+  .runTemplatePreviewRow small:nth-of-type(2) {
+    grid-area: place;
+  }
+
+  .runTemplateRow input[aria-label="メモ"],
+  .runTemplatePreviewRow small:nth-of-type(3) {
+    grid-area: note;
+  }
+
+  .runTemplateRow .scheduleDeleteButton {
+    grid-area: delete;
+  }
+
+  .scheduleOverlay .runScheduleRow input,
+  .scheduleOverlay .runScheduleRow select,
+  .scheduleOverlay .runScheduleAdd input,
+  .scheduleOverlay .runScheduleAdd select,
+  .runTemplateRow input,
+  .runTemplateRow select {
+    height: 34px;
+    min-height: 34px;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .scheduleOverlay .runScheduleRow select[aria-label="担当区分"],
+  .scheduleOverlay .runScheduleAdd select[aria-label="追加担当区分"],
+  .runTemplateRow select[aria-label="担当区分"],
+  .runTemplatePreviewRow .previewOwnerKind {
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runTemplatePreviewRow b,
+  .runTemplatePreviewRow small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .templateTop,
+  .templateMeta,
+  .templateTaskFields,
+  .templateFooter,
+  .previewFooter {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .taskControls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .taskViews,
+  .chekiStats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .taskViews button {
+    padding-inline: 4px;
+  }
+
+  .panelTitleAction {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .panelTitleAction .miniScheduleButton,
+  .panelTitleAction .miniAddButton {
+    width: auto;
+  }
+
+  .scheduleOverlay .runScheduleActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scheduleOverlay .runScheduleRow,
+  .scheduleOverlay .runScheduleAdd,
+  .runTemplateRow {
+    grid-template-columns: minmax(92px, 0.44fr) minmax(0, 1fr) 32px;
+  }
+
+  .runTemplatePreviewRow {
+    grid-template-columns: minmax(92px, 0.44fr) minmax(0, 1fr);
+  }
+
+  .scheduleOverlay .runScheduleRow input,
+  .scheduleOverlay .runScheduleRow select,
+  .scheduleOverlay .runScheduleAdd input,
+  .scheduleOverlay .runScheduleAdd select,
+  .runTemplateRow input,
+  .runTemplateRow select {
+    padding-inline: 6px;
+  }
+
+  .runTemplateRow input[aria-label="内容"],
+  .scheduleOverlay .runScheduleRow input[aria-label="内容"] {
+    font-size: 11px;
   }
 }
